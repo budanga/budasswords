@@ -31,7 +31,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['json'],
-      dialogTitle: 'Seleccioná tu exportación de Bitwarden',
+      dialogTitle: 'Select your Bitwarden export',
     );
 
     if (result == null || result.files.isEmpty) {
@@ -51,7 +51,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
 
       final items = json['items'] as List<dynamic>?;
       if (items == null) {
-        throw Exception('El archivo no tiene el formato correcto de Bitwarden.');
+        throw Exception('Invalid Bitwarden file format.');
       }
 
       int imported = 0;
@@ -60,7 +60,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       for (final item in items) {
         try {
           final map = item as Map<String, dynamic>;
-          final name = (map['name'] as String?) ?? 'Sin título';
+          final name = (map['name'] as String?) ?? 'Untitled';
           final notes = (map['notes'] as String?) ?? '';
           final type = map['type'] as int? ?? 0;
 
@@ -77,30 +77,31 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                   ? (uris.first as Map<String, dynamic>)['uri'] as String?
                   : null;
               final parts = <String>[];
-              if (username.isNotEmpty) parts.add('Usuario: $username');
-              if (password.isNotEmpty) parts.add('Contraseña: $password');
-              if (notes.isNotEmpty) parts.add('Notas: $notes');
+              if (username.isNotEmpty) parts.add('Username: $username');
+              if (password.isNotEmpty) parts.add('Password: $password');
+              if (notes.isNotEmpty) parts.add('Notes: $notes');
               content = parts.join('\n');
 
             case 2: // Secure Note
-              content = notes.isNotEmpty ? notes : '(nota vacía)';
+              content = notes.isNotEmpty ? notes : '(empty note)';
 
             case 3: // Card
               final card = map['card'] as Map<String, dynamic>?;
-              final holder   = (card?['cardholderName'] as String?) ?? '';
-              final brand    = (card?['brand'] as String?) ?? '';
-              final number   = (card?['number'] as String?) ?? '';
+              final holder = (card?['cardholderName'] as String?) ?? '';
+              final brand = (card?['brand'] as String?) ?? '';
+              final number = (card?['number'] as String?) ?? '';
               final expMonth = (card?['expMonth'] as String?) ?? '';
-              final expYear  = (card?['expYear'] as String?) ?? '';
-              final cvv      = (card?['code'] as String?) ?? '';
+              final expYear = (card?['expYear'] as String?) ?? '';
+              final cvv = (card?['code'] as String?) ?? '';
               final cardParts = <String>[];
-              if (holder.isNotEmpty)   cardParts.add('Titular: $holder');
-              if (brand.isNotEmpty)    cardParts.add('Marca: $brand');
-              if (number.isNotEmpty)   cardParts.add('Número: $number');
-              if (expMonth.isNotEmpty || expYear.isNotEmpty)
-                cardParts.add('Vencimiento: $expMonth/$expYear');
-              if (cvv.isNotEmpty)      cardParts.add('CVV: $cvv');
-              if (notes.isNotEmpty)    cardParts.add('Notas: $notes');
+              if (holder.isNotEmpty) cardParts.add('Holder: $holder');
+              if (brand.isNotEmpty) cardParts.add('Brand: $brand');
+              if (number.isNotEmpty) cardParts.add('Number: $number');
+              if (expMonth.isNotEmpty || expYear.isNotEmpty) {
+                cardParts.add('Expires: $expMonth/$expYear');
+              }
+              if (cvv.isNotEmpty) cardParts.add('CVV: $cvv');
+              if (notes.isNotEmpty) cardParts.add('Notes: $notes');
               content = cardParts.join('\n');
 
             case 4: // Identity
@@ -109,24 +110,34 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
               void addId(String label, String? val) {
                 if (val != null && val.isNotEmpty) idParts.add('$label: $val');
               }
-              addId('Nombre', [
-                id?['title'], id?['firstName'],
-                id?['middleName'], id?['lastName']
-              ].whereType<String>().where((s) => s.isNotEmpty).join(' '));
-              addId('Empresa', id?['company']);
+              addId(
+                  'Name',
+                  [
+                    id?['title'],
+                    id?['firstName'],
+                    id?['middleName'],
+                    id?['lastName']
+                  ].whereType<String>().where((s) => s.isNotEmpty).join(' '));
+              addId('Company', id?['company']);
               addId('Email', id?['email']);
-              addId('Teléfono', id?['phone']);
-              addId('DNI/Pasaporte', id?['ssn'] ?? id?['passportNumber']);
-              addId('Dirección', [
-                id?['address1'], id?['address2'],
-                id?['city'], id?['state'], id?['postalCode'], id?['country']
-              ].whereType<String>().where((s) => s.isNotEmpty).join(', '));
-              if (notes.isNotEmpty) idParts.add('Notas: $notes');
+              addId('Phone', id?['phone']);
+              addId('SSN/Passport', id?['ssn'] ?? id?['passportNumber']);
+              addId(
+                  'Address',
+                  [
+                    id?['address1'],
+                    id?['address2'],
+                    id?['city'],
+                    id?['state'],
+                    id?['postalCode'],
+                    id?['country']
+                  ].whereType<String>().where((s) => s.isNotEmpty).join(', '));
+              if (notes.isNotEmpty) idParts.add('Notes: $notes');
               content = idParts.join('\n');
 
             default:
               // Unknown type — save notes as fallback
-              content = notes.isNotEmpty ? notes : '(entrada vacía)';
+              content = notes.isNotEmpty ? notes : '(empty entry)';
           }
 
           await ref.read(vaultNotifierProvider.notifier).createEntry(
@@ -157,7 +168,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg0,
-      appBar: AppBar(title: const Text('Importar desde Bitwarden')),
+      appBar: AppBar(title: const Text('Import from Bitwarden')),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -179,8 +190,8 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                 icon: const Icon(Icons.file_open_outlined),
                 label: Text(
                   _state == _ImportState.done
-                      ? 'Importación completada'
-                      : 'Seleccionar archivo JSON',
+                      ? 'Import complete'
+                      : 'Select JSON file',
                 ),
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.accent,
@@ -208,8 +219,8 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
             children: [
               const CircularProgressIndicator(),
               const Gap(16),
-              Text(
-                'Importando entradas...',
+              const Text(
+                'Importing entries...',
                 style: TextStyle(color: AppColors.textSecondary),
               ),
               if (_filePath != null) ...[
@@ -232,13 +243,13 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.check_circle_outline,
-                  color: AppColors.success, size: 72)
+              const Icon(Icons.check_circle_outline,
+                      color: AppColors.success, size: 72)
                   .animate()
                   .scale(duration: 400.ms, curve: Curves.elasticOut),
               const Gap(20),
               Text(
-                '$_imported contraseñas importadas',
+                '$_imported entries imported',
                 style: const TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 22,
@@ -248,7 +259,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
               if (_skipped > 0) ...[
                 const Gap(8),
                 Text(
-                  '$_skipped entradas no se pudieron importar.',
+                  '$_skipped entries could not be imported.',
                   style: const TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
@@ -269,7 +280,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                   color: AppColors.danger, size: 56),
               const Gap(16),
               Text(
-                _error ?? 'Error desconocido',
+                _error ?? 'Unknown error',
                 style: const TextStyle(color: AppColors.danger),
                 textAlign: TextAlign.center,
               ),
@@ -295,12 +306,12 @@ class _InfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
               Icon(Icons.info_outline, color: AppColors.accent, size: 20),
-              const Gap(8),
-              const Text(
-                'Cómo exportar desde Bitwarden',
+              Gap(8),
+              Text(
+                'How to export from Bitwarden',
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w600,
@@ -310,13 +321,13 @@ class _InfoCard extends StatelessWidget {
             ],
           ),
           const Gap(10),
-          _step('1', 'Abrí Bitwarden en tu navegador o app.'),
-          _step('2', 'Andá a Herramientas → Exportar bóveda.'),
-          _step('3', 'Elegí formato JSON (sin cifrar).'),
-          _step('4', 'Guardá el archivo y seleccionalo acá.'),
+          _step('1', 'Open Bitwarden in your browser or app.'),
+          _step('2', 'Go to Tools → Export Vault.'),
+          _step('3', 'Choose JSON (unencrypted) format.'),
+          _step('4', 'Save the file and select it here.'),
           const Gap(8),
           const Text(
-            '⚠ El archivo JSON contiene tus contraseñas en texto plano. Eliminalo cuando termines.',
+            '⚠ The JSON file contains your passwords in plain text. Delete it when finished.',
             style: TextStyle(
               color: AppColors.danger,
               fontSize: 12,
@@ -343,7 +354,7 @@ class _InfoCard extends StatelessWidget {
             ),
             child: Text(
               n,
-              style: TextStyle(
+              style: const TextStyle(
                 color: AppColors.accent,
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
