@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -27,11 +26,12 @@ class AuthState {
     this.error,
   });
 
-  AuthState copyWith({AuthStatus? status, UserSession? session, String? error}) =>
+  AuthState copyWith(
+          {AuthStatus? status, UserSession? session, String? error}) =>
       AuthState(
-        status:  status  ?? this.status,
+        status: status ?? this.status,
         session: session ?? this.session,
-        error:   error,
+        error: error,
       );
 }
 
@@ -88,7 +88,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // 3. Create proof blob so we can verify master pw later
       final proof = await _cipher!.createProof();
 
-      // 4. Persist salt + proof
+      // 4. Persist salt + proof locally
       await _secureStorage.write(
         key: AppConstants.kSaltKey,
         value: CryptoUtils.toHex(salt),
@@ -98,14 +98,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
         value: CryptoUtils.toHex(proof),
       );
 
-      // 5. Unlock DAO
+      // 5. Sync salt + proof to Supabase Metadata (for other devices)
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(
+          data: {
+            'vault_salt': CryptoUtils.toHex(salt),
+            'vault_proof': CryptoUtils.toHex(proof),
+          },
+        ),
+      );
+
+      // 6. Unlock DAO
       _vaultDao.setCipher(_cipher!);
 
       state = state.copyWith(
         status: AuthStatus.unlocked,
         session: UserSession(
-          userId:    res.user!.id,
-          email:     email,
+          userId: res.user!.id,
+          email: email,
           unlockedAt: DateTime.now(),
         ),
       );
@@ -113,7 +123,43 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.locked,
-        error:  e.toString(),
+        error: e.toString(),
+      );
+      return false;
+    }
+  }
+
+  // ── Login to existing account ─────────────────────
+
+  Future<bool> signIn({
+    required String email,
+    required String password,
+  }) async {
+    state = state.copyWith(status: AuthStatus.loading);
+    try {
+      final res = await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      if (res.user == null) throw Exception('Login failed');
+
+      // Check if we need to pull salt/proof from metadata
+      final metadata = res.user!.userMetadata;
+      final saltHex = metadata?['vault_salt'] as String?;
+      final proofHex = metadata?['vault_proof'] as String?;
+
+      if (saltHex != null && proofHex != null) {
+        await _secureStorage.write(key: AppConstants.kSaltKey, value: saltHex);
+        await _secureStorage.write(
+            key: AppConstants.kProofBlobKey, value: proofHex);
+      }
+
+      state = state.copyWith(status: AuthStatus.locked);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.setup,
+        error: e.toString(),
       );
       return false;
     }
@@ -123,13 +169,30 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<bool> unlock(String masterPassword) async {
     try {
-      final saltHex  = await _secureStorage.read(key: AppConstants.kSaltKey);
-      final proofHex = await _secureStorage.read(key: AppConstants.kProofBlobKey);
+      var saltHex = await _secureStorage.read(key: AppConstants.kSaltKey);
+      var proofHex = await _secureStorage.read(key: AppConstants.kProofBlobKey);
+
+      // If missing locally, try to fetch from Supabase metadata
+      if (saltHex == null || proofHex == null) {
+        final user = Supabase.instance.client.auth.currentUser;
+        if (user != null) {
+          saltHex = user.userMetadata?['vault_salt'] as String?;
+          proofHex = user.userMetadata?['vault_proof'] as String?;
+
+          if (saltHex != null && proofHex != null) {
+            await _secureStorage.write(
+                key: AppConstants.kSaltKey, value: saltHex);
+            await _secureStorage.write(
+                key: AppConstants.kProofBlobKey, value: proofHex);
+          }
+        }
+      }
+
       if (saltHex == null || proofHex == null) {
         throw Exception('No vault found. Please set up first.');
       }
 
-      final salt      = CryptoUtils.fromHex(saltHex);
+      final salt = CryptoUtils.fromHex(saltHex);
       final proofBlob = CryptoUtils.fromHex(proofHex);
 
       final keyBytes = await KeyDerivation.deriveKey(
@@ -143,7 +206,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         candidate.wipe();
         state = state.copyWith(
           status: AuthStatus.locked,
-          error:  'Incorrect master password.',
+          error: 'Incorrect master password.',
         );
         return false;
       }
@@ -158,8 +221,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         status: AuthStatus.unlocked,
         session: UserSession(
-          userId:    supaUser?.id ?? 'offline',
-          email:     supaUser?.email ?? '',
+          userId: supaUser?.id ?? 'offline',
+          email: supaUser?.email ?? '',
           unlockedAt: DateTime.now(),
         ),
       );
@@ -167,7 +230,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.locked,
-        error:  e.toString(),
+        error: e.toString(),
       );
       return false;
     }

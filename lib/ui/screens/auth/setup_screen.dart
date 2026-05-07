@@ -22,6 +22,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   bool _obscurePw      = true;
   bool _obscureMaster  = true;
   bool _loading        = false;
+  bool _isLogin        = false; // Toggle between Setup and Login
 
   @override
   void dispose() {
@@ -35,13 +36,23 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
-    final ok = await ref.read(authProvider.notifier).setup(
-          email:          _emailCtrl.text.trim(),
-          password:       _passwordCtrl.text,
-          masterPassword: _masterPwCtrl.text,
-        );
+
+    bool ok;
+    if (_isLogin) {
+      ok = await ref.read(authProvider.notifier).signIn(
+            email:    _emailCtrl.text.trim(),
+            password: _passwordCtrl.text,
+          );
+    } else {
+      ok = await ref.read(authProvider.notifier).setup(
+            email:          _emailCtrl.text.trim(),
+            password:       _passwordCtrl.text,
+            masterPassword: _masterPwCtrl.text,
+          );
+    }
+
     if (!ok && mounted) {
-      final err = ref.read(authProvider).error ?? 'Setup failed';
+      final err = ref.read(authProvider).error ?? 'Operation failed';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(err), backgroundColor: AppColors.danger),
       );
@@ -64,10 +75,13 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                 const Gap(40),
                 _BudLogo(),
                 const Gap(32),
-                Text('Create your vault',
+                Text(_isLogin ? 'Welcome back' : 'Create your vault',
                     style: Theme.of(context).textTheme.displayLarge),
                 const Gap(8),
-                Text('One account. All your secrets.',
+                Text(
+                    _isLogin
+                        ? 'Sign in to access your vault'
+                        : 'One account. All your secrets.',
                     style: Theme.of(context).textTheme.bodyMedium),
                 const Gap(36),
                 _field(
@@ -88,30 +102,33 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                   validator: (v) =>
                       (v == null || v.length < 8) ? 'Minimum 8 characters' : null,
                 ),
-                const Gap(16),
-                _field(
-                  ctrl: _masterPwCtrl,
-                  label: 'Master password (vault key)',
-                  icon: Icons.vpn_key_outlined,
-                  obscure: _obscureMaster,
-                  toggleObscure: () =>
-                      setState(() => _obscureMaster = !_obscureMaster),
-                  validator: (v) =>
-                      (v == null || v.length < 12) ? 'Minimum 12 characters' : null,
-                ),
-                const Gap(16),
-                TextFormField(
-                  controller: _confirmPwCtrl,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Confirm master password',
-                    prefixIcon: Icon(Icons.vpn_key_outlined,
-                        color: AppColors.textSecondary),
+                if (!_isLogin) ...[
+                  const Gap(16),
+                  _field(
+                    ctrl: _masterPwCtrl,
+                    label: 'Master password (vault key)',
+                    icon: Icons.vpn_key_outlined,
+                    obscure: _obscureMaster,
+                    toggleObscure: () =>
+                        setState(() => _obscureMaster = !_obscureMaster),
+                    validator: (v) => (v == null || v.length < 12)
+                        ? 'Minimum 12 characters'
+                        : null,
                   ),
-                  validator: (v) => v != _masterPwCtrl.text
-                      ? 'Passwords do not match'
-                      : null,
-                ),
+                  const Gap(16),
+                  TextFormField(
+                    controller: _confirmPwCtrl,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Confirm master password',
+                      prefixIcon: Icon(Icons.vpn_key_outlined,
+                          color: AppColors.textSecondary),
+                    ),
+                    validator: (v) => v != _masterPwCtrl.text
+                        ? 'Passwords do not match'
+                        : null,
+                  ),
+                ],
                 const Gap(32),
                 ElevatedButton(
                   onPressed: _loading ? null : _submit,
@@ -122,8 +139,17 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                           child: CircularProgressIndicator(
                               strokeWidth: 2.5, color: Colors.white),
                         )
-                      : const Text('Create Vault'),
+                      : Text(_isLogin ? 'Sign In' : 'Create Vault'),
                 ).animate().fadeIn(delay: 200.ms),
+                const Gap(16),
+                Center(
+                  child: TextButton(
+                    onPressed: () => setState(() => _isLogin = !_isLogin),
+                    child: Text(_isLogin
+                        ? "Don't have a vault? Create one"
+                        : "Already have a vault? Sign in"),
+                  ),
+                ),
               ],
             ),
           ),
