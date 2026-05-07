@@ -70,25 +70,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String masterPassword,
   }) async {
     try {
-      // 1. Create Supabase account
-      final res = await Supabase.instance.client.auth.signUp(
-        email: email,
-        password: password,
-      );
-      if (res.user == null) throw Exception('Sign-up failed');
-
-      // 2. Derive AES key
+      // 1. Derive AES key and generate salt/proof first
       final salt = KeyDerivation.generateSalt();
       final keyBytes = await KeyDerivation.deriveKey(
         password: masterPassword,
         salt: salt,
       );
       _cipher = VaultCipher(keyBytes);
-
-      // 3. Create proof blob so we can verify master pw later
       final proof = await _cipher!.createProof();
 
-      // 4. Persist salt + proof locally
+      // 2. Create Supabase account with metadata
+      final res = await Supabase.instance.client.auth.signUp(
+        email: email,
+        password: password,
+        data: {
+          'vault_salt': CryptoUtils.toHex(salt),
+          'vault_proof': CryptoUtils.toHex(proof),
+        },
+      );
+      if (res.user == null) throw Exception('Sign-up failed');
+
+      // 3. Persist salt + proof locally
       await _secureStorage.write(
         key: AppConstants.kSaltKey,
         value: CryptoUtils.toHex(salt),
@@ -96,16 +98,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _secureStorage.write(
         key: AppConstants.kProofBlobKey,
         value: CryptoUtils.toHex(proof),
-      );
-
-      // 5. Sync salt + proof to Supabase Metadata (for other devices)
-      await Supabase.instance.client.auth.updateUser(
-        UserAttributes(
-          data: {
-            'vault_salt': CryptoUtils.toHex(salt),
-            'vault_proof': CryptoUtils.toHex(proof),
-          },
-        ),
       );
 
       // 6. Unlock DAO
