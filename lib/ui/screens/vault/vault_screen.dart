@@ -139,7 +139,7 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.lock_open_outlined,
+          const Icon(Icons.lock_open_outlined,
               size: 64, color: AppColors.textDisabled),
           const Gap(16),
           Text(

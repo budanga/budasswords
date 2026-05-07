@@ -17,7 +17,7 @@ class SecretField extends StatefulWidget {
 
 class _SecretFieldState extends State<SecretField> {
   bool _revealed = false;
-  bool _copied   = false;
+  bool _copied = false;
   Timer? _clearTimer;
 
   @override
@@ -33,7 +33,7 @@ class _SecretFieldState extends State<SecretField> {
     // Schedule clipboard clear after configured timeout
     _clearTimer?.cancel();
     _clearTimer = Timer(
-      Duration(seconds: AppConstants.clipboardClearSeconds),
+      const Duration(seconds: AppConstants.clipboardClearSeconds),
       () async {
         await Clipboard.setData(const ClipboardData(text: ''));
         if (mounted) setState(() => _copied = false);

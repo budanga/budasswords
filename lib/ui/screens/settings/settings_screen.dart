@@ -66,11 +66,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const Gap(32),
 
           // App info
-          Center(
+          const Center(
             child: Text(
               'Budasswords v1.0.0\nEnd-to-end encrypted · AES-256-GCM · Argon2id',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textDisabled,
                 fontSize: 12,
                 height: 1.6,

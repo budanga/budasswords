@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:budasswords/providers/auth_provider.dart';
@@ -34,10 +33,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
     },
     routes: [
-      GoRoute(path: '/splash',   builder: (_, __) => const SplashScreen()),
-      GoRoute(path: '/setup',    builder: (_, __) => const SetupScreen()),
-      GoRoute(path: '/login',    builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/vault',    builder: (_, __) => const VaultScreen()),
+      GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
+      GoRoute(path: '/setup', builder: (_, __) => const SetupScreen()),
+      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(path: '/vault', builder: (_, __) => const VaultScreen()),
       GoRoute(
         path: '/entry/:id',
         builder: (_, state) {
