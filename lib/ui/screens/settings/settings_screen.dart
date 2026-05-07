@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:budasswords/core/constants/app_colors.dart';
 import 'package:budasswords/core/constants/app_constants.dart';
 import 'package:budasswords/providers/auth_provider.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -16,10 +15,39 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  int _lockTimeout = AppConstants.autoLockMinutes;
+  int? _localTimeout;
+
+  final List<int> _intervals = [1, 5, 10, 15, 30, 45, 60, 90, 120, 180];
+
+  String _formatTimeout(int minutes) {
+    if (minutes < 60) return '$minutes min';
+    if (minutes == 60) return '1 hour';
+    if (minutes == 90) return '1.5 hours';
+    if (minutes == 120) return '2 hours';
+    if (minutes == 180) return '3 hours';
+    return '$minutes min';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final auth = ref.watch(authProvider.notifier);
+    final timeout = _localTimeout ?? auth.timeoutMinutes;
+
+    // Find closest interval index for the slider
+    int currentIndex = _intervals.indexOf(timeout);
+    if (currentIndex == -1) {
+      // Fallback: find nearest
+      currentIndex = 0;
+      int minDiff = (timeout - _intervals[0]).abs();
+      for (int i = 1; i < _intervals.length; i++) {
+        int diff = (timeout - _intervals[i]).abs();
+        if (diff < minDiff) {
+          minDiff = diff;
+          currentIndex = i;
+        }
+      }
+    }
+
     return Scaffold(
       backgroundColor: AppColors.bg0,
       appBar: AppBar(title: const Text('Settings')),
@@ -30,15 +58,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SettingCard(
             icon: Icons.lock_clock_outlined,
             title: 'Auto-lock timeout',
-            subtitle: '$_lockTimeout minutes',
+            subtitle: _formatTimeout(timeout),
             child: Slider(
-              value: _lockTimeout.toDouble(),
-              min: 1,
-              max: 30,
-              divisions: 29,
+              value: currentIndex.toDouble(),
+              min: 0,
+              max: (_intervals.length - 1).toDouble(),
+              divisions: _intervals.length - 1,
               activeColor: AppColors.accent,
-              label: '$_lockTimeout min',
-              onChanged: (v) => setState(() => _lockTimeout = v.toInt()),
+              label: _formatTimeout(_intervals[currentIndex]),
+              onChanged: (v) {
+                setState(() => _localTimeout = _intervals[v.toInt()]);
+              },
+              onChangeEnd: (v) {
+                auth.updateTimeout(_intervals[v.toInt()]);
+              },
             ),
           ).animate().fadeIn(),
           const Gap(8),
@@ -58,8 +91,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // Import from Bitwarden
           _SettingCard(
             icon: Icons.download_outlined,
-            title: 'Importar desde Bitwarden',
-            subtitle: 'Migrá tus contraseñas con un archivo JSON',
+            title: 'Import from Bitwarden',
+            subtitle: 'Migrate passwords via JSON file',
             onTap: () => context.push('/import'),
           ).animate(delay: 120.ms).fadeIn(),
           const Gap(8),
@@ -142,6 +175,7 @@ class _SettingCard extends StatelessWidget {
     return Card(
       child: InkWell(
         onTap: onTap,
+        mouseCursor: SystemMouseCursors.click,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),

@@ -56,7 +56,29 @@ abstract class AppTheme {
             fontWeight: FontWeight.w600,
           ),
           elevation: 0,
+        ).copyWith(
+          mouseCursor: WidgetStateProperty.all(SystemMouseCursors.click),
         ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom().copyWith(
+          mouseCursor: WidgetStateProperty.all(SystemMouseCursors.click),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom().copyWith(
+          mouseCursor: WidgetStateProperty.all(SystemMouseCursors.click),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom().copyWith(
+          mouseCursor: WidgetStateProperty.all(SystemMouseCursors.click),
+        ),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: AppColors.accent,
+        foregroundColor: Colors.white,
+        mouseCursor: WidgetStateProperty.all(SystemMouseCursors.click),
       ),
       textTheme: GoogleFonts.interTextTheme(base.textTheme).copyWith(
         displayLarge: GoogleFonts.inter(
@@ -88,10 +110,6 @@ abstract class AppTheme {
       dividerTheme: const DividerThemeData(
         color: AppColors.border,
         thickness: 1,
-      ),
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: AppColors.accent,
-        foregroundColor: Colors.white,
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.bg3,

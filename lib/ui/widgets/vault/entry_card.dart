@@ -12,6 +12,7 @@ class EntryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: InkWell(
+        mouseCursor: SystemMouseCursors.click,
         borderRadius: BorderRadius.circular(16),
         onTap: () => context.push('/entry/${entry.id}', extra: entry),
         child: Padding(

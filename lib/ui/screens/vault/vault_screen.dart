@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:budasswords/core/constants/app_colors.dart';
 import 'package:budasswords/providers/vault_provider.dart';
-import 'package:budasswords/providers/auth_provider.dart';
-import 'package:budasswords/domain/models/vault_entry.dart';
 import 'package:budasswords/ui/widgets/vault/entry_card.dart';
 import 'package:budasswords/ui/widgets/vault/sync_status_badge.dart';
 
@@ -44,26 +41,9 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.accent, AppColors.accentSoft],
-                ),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.shield_rounded,
-                  color: Colors.white, size: 18),
-            ),
-            const Gap(10),
-          Row(
-            children: [
-              Image.asset('assets/logo.png', width: 24, height: 24),
-              const Gap(8),
-              const Text('Budasswords'),
-            ],
-          ),
+            Image.asset('assets/logo.png', width: 24, height: 24),
+            const Gap(8),
+            const Text('Budasswords'),
           ],
         ),
         actions: [
@@ -112,7 +92,10 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                     return EntryCard(entry: entries[i])
                         .animate(delay: Duration(milliseconds: i * 20))
                         .fadeIn(duration: 150.ms)
-                        .slideX(begin: 0.05, duration: 200.ms, curve: Curves.easeOut);
+                        .slideX(
+                            begin: 0.05,
+                            duration: 200.ms,
+                            curve: Curves.easeOut);
                   },
                 );
               },

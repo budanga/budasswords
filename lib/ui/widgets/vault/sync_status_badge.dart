@@ -25,6 +25,7 @@ class SyncStatusBadge extends ConsumerWidget {
           orElse: () => 'Synchronized',
         ),
         child: InkWell(
+          mouseCursor: SystemMouseCursors.click,
           onTap: () {
             ref.read(vaultNotifierProvider.notifier).pushDirtyToRemote().then((_) {
               ref.read(vaultNotifierProvider.notifier).pullFromRemote();
