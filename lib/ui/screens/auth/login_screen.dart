@@ -110,36 +110,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 children: [
                   const Gap(48),
                   // Logo
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppColors.accent, AppColors.accentSoft],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.accent.withOpacity(0.4),
-                          blurRadius: 40,
-                          spreadRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.shield_rounded,
-                      color: Colors.white,
-                      size: 44,
-                    ),
-                  )
+                  Image.asset('assets/logo.png', width: 80, height: 80)
                       .animate()
-                      .scale(duration: 600.ms, curve: Curves.elasticOut),
-                  const Gap(28),
-                  Text(
+                      .scale(duration: 400.ms, curve: Curves.easeOutBack),
+                  const Gap(16),
+                  const Text(
                     'Budasswords',
-                    style: Theme.of(context).textTheme.displayLarge,
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.5,
+                    ),
                   ).animate().fadeIn(delay: 200.ms),
                   const Gap(8),
                   Text(

@@ -57,7 +57,13 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                   color: Colors.white, size: 18),
             ),
             const Gap(10),
-            const Text('Budasswords'),
+          Row(
+            children: [
+              Image.asset('assets/logo.png', width: 24, height: 24),
+              const Gap(8),
+              const Text('Budasswords'),
+            ],
+          ),
           ],
         ),
         actions: [
@@ -104,9 +110,9 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                   itemCount: entries.length,
                   itemBuilder: (context, i) {
                     return EntryCard(entry: entries[i])
-                        .animate(delay: Duration(milliseconds: i * 40))
-                        .fadeIn()
-                        .slideX(begin: 0.05);
+                        .animate(delay: Duration(milliseconds: i * 20))
+                        .fadeIn(duration: 150.ms)
+                        .slideX(begin: 0.05, duration: 200.ms, curve: Curves.easeOut);
                   },
                 );
               },

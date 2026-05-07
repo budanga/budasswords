@@ -14,26 +14,7 @@ class SplashScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // Logo
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.accent, AppColors.accentSoft],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.accent.withOpacity(0.4),
-                    blurRadius: 32,
-                    spreadRadius: 4,
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.shield_rounded, color: Colors.white, size: 42),
-            )
+            Image.asset('assets/logo.png', width: 80, height: 80)
                 .animate()
                 .scale(duration: 600.ms, curve: Curves.elasticOut),
             const SizedBox(height: 24),
@@ -44,7 +25,6 @@ class SplashScreen extends StatelessWidget {
                     letterSpacing: -0.5,
                   ),
             ).animate().fadeIn(delay: 300.ms),
-            const SizedBox(height: 8),
             Text(
               'Loading vault...',
               style: Theme.of(context).textTheme.bodyMedium,
