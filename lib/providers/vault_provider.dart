@@ -2,7 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../domain/models/vault_entry.dart';
 import '../data/local/daos/vault_dao.dart';
+import '../data/local/database.dart';
 import '../data/remote/supabase_vault_api.dart';
+import '../crypto/crypto_utils.dart';
+import 'package:drift/drift.dart';
+import 'dart:typed_data';
 import 'auth_provider.dart';
 import 'crypto_provider.dart';
 
@@ -125,6 +129,49 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
       // Offline — will retry on next sync cycle
     }
   }
+
+  Future<void> pullFromRemote() async {
+    state = const AsyncLoading();
+    try {
+      final remoteData = await _api.fetchAll(_userId);
+      for (final row in remoteData) {
+        // Map Supabase Map to Drift Companion
+        final companion = VaultEntriesCompanion(
+          id: Value(row['id'] as String),
+          userId: Value(row['user_id'] as String),
+          titleEnc: Value(_parseBlob(row['title_enc'])),
+          urlEnc: Value(row['url_enc'] != null
+              ? _parseBlob(row['url_enc'])
+              : null),
+          contentEnc: Value(_parseBlob(row['content_enc'])),
+          iv: Value(_parseBlob(row['iv'])),
+          createdAt: Value(
+              DateTime.parse(row['created_at']).millisecondsSinceEpoch),
+          updatedAt: Value(
+              DateTime.parse(row['updated_at']).millisecondsSinceEpoch),
+          deletedAt: Value(row['deleted_at'] != null
+              ? DateTime.parse(row['deleted_at']).millisecondsSinceEpoch
+              : null),
+          serverRev: Value(row['server_rev'] as int? ?? 1),
+        );
+        await _dao.upsertRaw(companion);
+      }
+      state = const AsyncData(null);
+    } catch (e, st) {
+      state = AsyncError(e, st);
+    }
+  }
+
+  Uint8List _parseBlob(dynamic data) {
+    if (data == null) return Uint8List(0);
+    if (data is Uint8List) return data;
+    if (data is List) return Uint8List.fromList(List<int>.from(data));
+    if (data is String) {
+      final hex = data.startsWith('\\x') ? data.substring(2) : data;
+      return CryptoUtils.fromHex(hex);
+    }
+    return Uint8List(0);
+  }
 }
 
 final vaultNotifierProvider =
@@ -133,5 +180,13 @@ final vaultNotifierProvider =
   final api    = ref.watch(supabaseVaultApiProvider);
   final auth   = ref.watch(authProvider);
   final userId = auth.session?.userId ?? '';
-  return VaultNotifier(dao, api, userId);
+  
+  final notifier = VaultNotifier(dao, api, userId);
+  
+  // Trigger initial sync if unlocked
+  if (auth.status == AuthStatus.unlocked && userId.isNotEmpty) {
+    Future.microtask(() => notifier.pullFromRemote());
+  }
+  
+  return notifier;
 });
