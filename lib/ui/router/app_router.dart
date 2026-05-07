@@ -8,6 +8,7 @@ import 'package:budasswords/ui/screens/vault/vault_screen.dart';
 import 'package:budasswords/ui/screens/entry/entry_detail_screen.dart';
 import 'package:budasswords/ui/screens/entry/entry_form_screen.dart';
 import 'package:budasswords/ui/screens/settings/settings_screen.dart';
+import 'package:budasswords/ui/screens/settings/import_screen.dart';
 import 'package:budasswords/domain/models/vault_entry.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -52,6 +53,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
+      GoRoute(path: '/import', builder: (_, __) => const ImportScreen()),
     ],
   );
 });

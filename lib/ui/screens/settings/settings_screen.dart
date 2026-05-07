@@ -55,6 +55,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ).animate(delay: 60.ms).fadeIn(),
           const Gap(8),
 
+          // Import from Bitwarden
+          _SettingCard(
+            icon: Icons.download_outlined,
+            title: 'Importar desde Bitwarden',
+            subtitle: 'Migrá tus contraseñas con un archivo JSON',
+            onTap: () => context.push('/import'),
+          ).animate(delay: 120.ms).fadeIn(),
+          const Gap(8),
+
           // Sign out
           _SettingCard(
             icon: Icons.logout,
@@ -62,7 +71,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             subtitle: 'Clears all local data and keys',
             titleColor: AppColors.danger,
             onTap: () => _confirmSignOut(context),
-          ).animate(delay: 120.ms).fadeIn(),
+          ).animate(delay: 180.ms).fadeIn(),
           const Gap(32),
 
           // App info
