@@ -1,0 +1,22 @@
+# Secrets
+lib/core/constants/env.dart
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.g.dart
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Android
+android/local.properties
+android/.gradle/
+android/app/google-services.json
+
+# Windows
+windows/x64/
