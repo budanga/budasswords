@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -44,17 +45,47 @@ class AuthNotifier extends StateNotifier<AuthState> {
   final VaultDao _vaultDao;
 
   VaultCipher? _cipher;
+  Timer? _autolockTimer;
+  int _timeoutMinutes = AppConstants.autoLockMinutes;
 
   AuthNotifier(this._secureStorage, this._vaultDao)
       : super(const AuthState(status: AuthStatus.loading)) {
     _init();
   }
 
+  // ── Autolock ──────────────────────────────────────
+
+  void resetAutolock() {
+    _autolockTimer?.cancel();
+    if (state.status != AuthStatus.unlocked) return;
+
+    _autolockTimer = Timer(Duration(minutes: _timeoutMinutes), () {
+      lock();
+    });
+  }
+
+  Future<void> updateTimeout(int minutes) async {
+    _timeoutMinutes = minutes;
+    await _secureStorage.write(
+      key: AppConstants.kLockTimeoutKey,
+      value: minutes.toString(),
+    );
+    resetAutolock();
+  }
+
+  int get timeoutMinutes => _timeoutMinutes;
+
   // ── Init ──────────────────────────────────────────
 
   Future<void> _init() async {
     // Check if first launch (no salt stored yet)
     final salt = await _secureStorage.read(key: AppConstants.kSaltKey);
+    final timeoutStr =
+        await _secureStorage.read(key: AppConstants.kLockTimeoutKey);
+    if (timeoutStr != null) {
+      _timeoutMinutes = int.tryParse(timeoutStr) ?? AppConstants.autoLockMinutes;
+    }
+
     if (salt == null) {
       state = state.copyWith(status: AuthStatus.setup);
     } else {
@@ -111,6 +142,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           unlockedAt: DateTime.now(),
         ),
       );
+      resetAutolock();
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -218,6 +250,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           unlockedAt: DateTime.now(),
         ),
       );
+      resetAutolock();
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -234,6 +267,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _cipher?.wipe();
     _cipher = null;
     _vaultDao.clearCipher();
+    _autolockTimer?.cancel();
     state = const AuthState(status: AuthStatus.locked);
   }
 

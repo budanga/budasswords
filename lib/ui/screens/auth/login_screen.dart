@@ -16,15 +16,29 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _masterPwCtrl = TextEditingController();
-  bool _obscure  = true;
-  bool _loading  = false;
-
+  bool _obscure = true;
+  bool _loading = false;
   final _localAuth = LocalAuthentication();
+  bool _biometricAvailable = false;
+  bool _biometricPassed = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _tryBiometric());
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    try {
+      final canCheck = await _localAuth.canCheckBiometrics;
+      if (canCheck) {
+        final available = await _localAuth.getAvailableBiometrics();
+        if (available.isNotEmpty && mounted) {
+          setState(() => _biometricAvailable = true);
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -34,34 +48,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _tryBiometric() async {
-    // Biometric only on Android/iOS (not Windows)
-    if (!Platform.isAndroid && !Platform.isIOS) return;
+    if (!_biometricAvailable) return;
     try {
-      final canCheck  = await _localAuth.canCheckBiometrics;
-      final available = await _localAuth.getAvailableBiometrics();
-      if (!canCheck || available.isEmpty) return;
-
       final auth = await _localAuth.authenticate(
         localizedReason: 'Unlock Budasswords',
         options: const AuthenticationOptions(biometricOnly: true),
       );
       if (auth && mounted) {
-        // Biometric auth delegates to stored AES key from Keystore
-        // For simplicity we ask master password as fallback here.
-        // A production build would retrieve the key from Keystore directly.
-        _showBiometricFallback();
+        setState(() => _biometricPassed = true);
       }
-    } catch (_) {
-      // Biometrics unavailable — silent fallback to password
-    }
-  }
-
-  void _showBiometricFallback() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Biometric OK — enter master password once to load key.'),
-      ),
-    );
+    } catch (_) {}
   }
 
   Future<void> _unlock() async {
@@ -128,13 +124,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ).animate().fadeIn(delay: 300.ms),
                   const Gap(48),
+                  if (Platform.isAndroid && _biometricAvailable && !_biometricPassed) ...[
+                    OutlinedButton.icon(
+                      onPressed: _tryBiometric,
+                      icon: const Icon(Icons.fingerprint,
+                          color: AppColors.accentSoft, size: 28),
+                      label: const Text(
+                        'Unlock with Biometrics',
+                        style: TextStyle(
+                            color: AppColors.accentSoft,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 56),
+                        side: const BorderSide(
+                            color: AppColors.accent, width: 2),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ).animate().fadeIn(delay: 350.ms).slideY(begin: 0.1),
+                    const Gap(24),
+                  ],
                   // Password field
                   TextFormField(
                     controller: _masterPwCtrl,
+                    enabled: !_biometricAvailable || _biometricPassed,
                     obscureText: _obscure,
                     onFieldSubmitted: (_) => _unlock(),
                     decoration: InputDecoration(
-                      labelText: 'Master password',
+                      labelText: (_biometricAvailable && !_biometricPassed)
+                          ? 'Validate biometrics first...'
+                          : 'Master password',
                       prefixIcon: const Icon(
                         Icons.lock_outline,
                         color: AppColors.textSecondary,
@@ -146,14 +168,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               : Icons.visibility_off_outlined,
                           color: AppColors.textSecondary,
                         ),
-                        onPressed: () =>
-                            setState(() => _obscure = !_obscure),
+                        onPressed: () => setState(() => _obscure = !_obscure),
                       ),
                     ),
                   ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.1),
                   const Gap(20),
                   ElevatedButton(
-                    onPressed: _loading ? null : _unlock,
+                    onPressed:
+                        _loading || (_biometricAvailable && !_biometricPassed)
+                            ? null
+                            : _unlock,
                     child: _loading
                         ? const SizedBox(
                             height: 22,
@@ -165,26 +189,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           )
                         : const Text('Unlock Vault'),
                   ).animate().fadeIn(delay: 500.ms),
-                  if (Platform.isAndroid) ...[
-                    const Gap(20),
-                    OutlinedButton.icon(
-                      onPressed: _tryBiometric,
-                      icon: const Icon(Icons.fingerprint,
-                          color: AppColors.accentSoft),
-                      label: const Text(
-                        'Use Biometrics',
-                        style: TextStyle(color: AppColors.accentSoft),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 52),
-                        side: const BorderSide(
-                            color: AppColors.accentDim, width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ).animate().fadeIn(delay: 600.ms),
-                  ],
                 ],
               ),
             ),

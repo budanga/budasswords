@@ -7,7 +7,6 @@ import '../data/remote/supabase_vault_api.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../crypto/crypto_utils.dart';
 import 'package:drift/drift.dart';
-import 'dart:typed_data';
 import 'auth_provider.dart';
 import 'crypto_provider.dart';
 
@@ -16,7 +15,7 @@ import 'crypto_provider.dart';
 // ──────────────────────────────────────────────────
 
 final vaultEntriesProvider = StreamProvider<List<VaultEntry>>((ref) {
-  final auth  = ref.watch(authProvider);
+  final auth = ref.watch(authProvider);
   if (auth.status != AuthStatus.unlocked || auth.session == null) {
     return const Stream.empty();
   }
@@ -31,7 +30,7 @@ final vaultEntriesProvider = StreamProvider<List<VaultEntry>>((ref) {
 final searchQueryProvider = StateProvider<String>((ref) => '');
 
 final filteredEntriesProvider = Provider<AsyncValue<List<VaultEntry>>>((ref) {
-  final query   = ref.watch(searchQueryProvider).toLowerCase();
+  final query = ref.watch(searchQueryProvider).toLowerCase();
   final entries = ref.watch(vaultEntriesProvider);
   return entries.whenData((list) {
     if (query.isEmpty) return list;
@@ -64,12 +63,17 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
               id: Value(row['id'] as String),
               userId: Value(row['user_id'] as String),
               titleEnc: Value(_parseBlob(row['title_enc'])),
-              urlEnc: Value(row['url_enc'] != null ? _parseBlob(row['url_enc']) : null),
+              urlEnc: Value(
+                  row['url_enc'] != null ? _parseBlob(row['url_enc']) : null),
               contentEnc: Value(_parseBlob(row['content_enc'])),
               iv: Value(_parseBlob(row['iv'])),
-              createdAt: Value(DateTime.parse(row['created_at']).millisecondsSinceEpoch),
-              updatedAt: Value(DateTime.parse(row['updated_at']).millisecondsSinceEpoch),
-              deletedAt: Value(row['deleted_at'] != null ? DateTime.parse(row['deleted_at']).millisecondsSinceEpoch : null),
+              createdAt: Value(
+                  DateTime.parse(row['created_at']).millisecondsSinceEpoch),
+              updatedAt: Value(
+                  DateTime.parse(row['updated_at']).millisecondsSinceEpoch),
+              deletedAt: Value(row['deleted_at'] != null
+                  ? DateTime.parse(row['deleted_at']).millisecondsSinceEpoch
+                  : null),
               serverRev: Value(row['server_rev'] as int? ?? 1),
             );
             await _dao.upsertRaw(companion);
@@ -95,11 +99,11 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
     state = const AsyncLoading();
     try {
       final entry = VaultEntry(
-        id:        _uuid.v4(),
-        userId:    _userId,
-        title:     title,
-        url:       url?.isEmpty == true ? null : url,
-        content:   content,
+        id: _uuid.v4(),
+        userId: _userId,
+        title: title,
+        url: url?.isEmpty == true ? null : url,
+        content: content,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -146,18 +150,23 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
       for (final row in dirty) {
         try {
           await _api.upsert({
-            'id':          row.id,
-            'user_id':     row.userId,
-            'title_enc':   '\\x${CryptoUtils.toHex(row.titleEnc)}',
-            'url_enc':     row.urlEnc != null ? '\\x${CryptoUtils.toHex(row.urlEnc!)}' : null,
-            'content_enc': '\\x${CryptoUtils.toHex(row.contentEnc)}',
-            'iv':          '\\x${CryptoUtils.toHex(row.iv)}',
-            'created_at':  DateTime.fromMillisecondsSinceEpoch(row.createdAt).toIso8601String(),
-            'updated_at':  DateTime.fromMillisecondsSinceEpoch(row.updatedAt).toIso8601String(),
-            'deleted_at':  row.deletedAt != null
-                ? DateTime.fromMillisecondsSinceEpoch(row.deletedAt!).toIso8601String()
+            'id': row.id,
+            'user_id': row.userId,
+            'title_enc': '\\x${CryptoUtils.toHex(row.titleEnc)}',
+            'url_enc': row.urlEnc != null
+                ? '\\x${CryptoUtils.toHex(row.urlEnc!)}'
                 : null,
-            'server_rev':  row.serverRev,
+            'content_enc': '\\x${CryptoUtils.toHex(row.contentEnc)}',
+            'iv': '\\x${CryptoUtils.toHex(row.iv)}',
+            'created_at': DateTime.fromMillisecondsSinceEpoch(row.createdAt)
+                .toIso8601String(),
+            'updated_at': DateTime.fromMillisecondsSinceEpoch(row.updatedAt)
+                .toIso8601String(),
+            'deleted_at': row.deletedAt != null
+                ? DateTime.fromMillisecondsSinceEpoch(row.deletedAt!)
+                    .toIso8601String()
+                : null,
+            'server_rev': row.serverRev,
           });
           await _dao.markClean(row.id);
         } catch (e, st) {
@@ -181,15 +190,14 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
           id: Value(row['id'] as String),
           userId: Value(row['user_id'] as String),
           titleEnc: Value(_parseBlob(row['title_enc'])),
-          urlEnc: Value(row['url_enc'] != null
-              ? _parseBlob(row['url_enc'])
-              : null),
+          urlEnc:
+              Value(row['url_enc'] != null ? _parseBlob(row['url_enc']) : null),
           contentEnc: Value(_parseBlob(row['content_enc'])),
           iv: Value(_parseBlob(row['iv'])),
-          createdAt: Value(
-              DateTime.parse(row['created_at']).millisecondsSinceEpoch),
-          updatedAt: Value(
-              DateTime.parse(row['updated_at']).millisecondsSinceEpoch),
+          createdAt:
+              Value(DateTime.parse(row['created_at']).millisecondsSinceEpoch),
+          updatedAt:
+              Value(DateTime.parse(row['updated_at']).millisecondsSinceEpoch),
           deletedAt: Value(row['deleted_at'] != null
               ? DateTime.parse(row['deleted_at']).millisecondsSinceEpoch
               : null),
@@ -218,13 +226,13 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
 
 final vaultNotifierProvider =
     StateNotifierProvider<VaultNotifier, AsyncValue<void>>((ref) {
-  final dao    = ref.watch(vaultDaoProvider);
-  final api    = ref.watch(supabaseVaultApiProvider);
-  final auth   = ref.watch(authProvider);
+  final dao = ref.watch(vaultDaoProvider);
+  final api = ref.watch(supabaseVaultApiProvider);
+  final auth = ref.watch(authProvider);
   final userId = auth.session?.userId ?? '';
-  
+
   final notifier = VaultNotifier(dao, api, userId);
-  
+
   // Trigger initial sync if unlocked
   if (auth.status == AuthStatus.unlocked && userId.isNotEmpty) {
     Future.microtask(() async {
@@ -232,6 +240,6 @@ final vaultNotifierProvider =
       await notifier.pullFromRemote();
     });
   }
-  
+
   return notifier;
 });
