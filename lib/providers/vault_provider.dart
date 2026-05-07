@@ -4,6 +4,7 @@ import '../domain/models/vault_entry.dart';
 import '../data/local/daos/vault_dao.dart';
 import '../data/local/database.dart';
 import '../data/remote/supabase_vault_api.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../crypto/crypto_utils.dart';
 import 'package:drift/drift.dart';
 import 'dart:typed_data';
@@ -51,8 +52,38 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
   final SupabaseVaultApi _api;
   final String _userId;
 
+  RealtimeChannel? _channel;
+
   VaultNotifier(this._dao, this._api, this._userId)
-      : super(const AsyncData(null));
+      : super(const AsyncData(null)) {
+    if (_userId.isNotEmpty) {
+      _channel = _api.watchChanges(_userId, (remoteData) async {
+        try {
+          for (final row in remoteData) {
+            final companion = VaultEntriesCompanion(
+              id: Value(row['id'] as String),
+              userId: Value(row['user_id'] as String),
+              titleEnc: Value(_parseBlob(row['title_enc'])),
+              urlEnc: Value(row['url_enc'] != null ? _parseBlob(row['url_enc']) : null),
+              contentEnc: Value(_parseBlob(row['content_enc'])),
+              iv: Value(_parseBlob(row['iv'])),
+              createdAt: Value(DateTime.parse(row['created_at']).millisecondsSinceEpoch),
+              updatedAt: Value(DateTime.parse(row['updated_at']).millisecondsSinceEpoch),
+              deletedAt: Value(row['deleted_at'] != null ? DateTime.parse(row['deleted_at']).millisecondsSinceEpoch : null),
+              serverRev: Value(row['server_rev'] as int? ?? 1),
+            );
+            await _dao.upsertRaw(companion);
+          }
+        } catch (_) {}
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _channel?.unsubscribe();
+    super.dispose();
+  }
 
   static const _uuid = Uuid();
 
@@ -104,29 +135,39 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
   }
 
   Future<void> _syncEntry(VaultEntry entry) async {
-    try {
-      // We upload the encrypted blobs from the local row
-      final dirty = await _dao.getDirtyEntries(_userId);
-      final row = dirty.where((r) => r.id == entry.id).firstOrNull;
-      if (row == null) return;
+    // Just trigger a full push of all dirty entries
+    await pushDirtyToRemote();
+    await pullFromRemote();
+  }
 
-      await _api.upsert({
-        'id':          row.id,
-        'user_id':     row.userId,
-        'title_enc':   row.titleEnc,
-        'url_enc':     row.urlEnc,
-        'content_enc': row.contentEnc,
-        'iv':          row.iv,
-        'created_at':  DateTime.fromMillisecondsSinceEpoch(row.createdAt).toIso8601String(),
-        'updated_at':  DateTime.fromMillisecondsSinceEpoch(row.updatedAt).toIso8601String(),
-        'deleted_at':  row.deletedAt != null
-            ? DateTime.fromMillisecondsSinceEpoch(row.deletedAt!).toIso8601String()
-            : null,
-        'server_rev':  row.serverRev,
-      });
-      await _dao.markClean(row.id);
-    } catch (_) {
-      // Offline — will retry on next sync cycle
+  Future<void> pushDirtyToRemote() async {
+    try {
+      final dirty = await _dao.getDirtyEntries(_userId);
+      for (final row in dirty) {
+        try {
+          await _api.upsert({
+            'id':          row.id,
+            'user_id':     row.userId,
+            'title_enc':   '\\x${CryptoUtils.toHex(row.titleEnc)}',
+            'url_enc':     row.urlEnc != null ? '\\x${CryptoUtils.toHex(row.urlEnc!)}' : null,
+            'content_enc': '\\x${CryptoUtils.toHex(row.contentEnc)}',
+            'iv':          '\\x${CryptoUtils.toHex(row.iv)}',
+            'created_at':  DateTime.fromMillisecondsSinceEpoch(row.createdAt).toIso8601String(),
+            'updated_at':  DateTime.fromMillisecondsSinceEpoch(row.updatedAt).toIso8601String(),
+            'deleted_at':  row.deletedAt != null
+                ? DateTime.fromMillisecondsSinceEpoch(row.deletedAt!).toIso8601String()
+                : null,
+            'server_rev':  row.serverRev,
+          });
+          await _dao.markClean(row.id);
+        } catch (e, st) {
+          // If a single row fails, keep trying others.
+          print('Push failed for ${row.id}: $e\n$st');
+        }
+      }
+    } catch (e, st) {
+      // Offline or db error
+      print('pushDirtyToRemote failed overall: $e\n$st');
     }
   }
 
@@ -158,6 +199,7 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
       }
       state = const AsyncData(null);
     } catch (e, st) {
+      print('pullFromRemote failed: $e\n$st');
       state = AsyncError(e, st);
     }
   }
@@ -185,7 +227,10 @@ final vaultNotifierProvider =
   
   // Trigger initial sync if unlocked
   if (auth.status == AuthStatus.unlocked && userId.isNotEmpty) {
-    Future.microtask(() => notifier.pullFromRemote());
+    Future.microtask(() async {
+      await notifier.pushDirtyToRemote();
+      await notifier.pullFromRemote();
+    });
   }
   
   return notifier;

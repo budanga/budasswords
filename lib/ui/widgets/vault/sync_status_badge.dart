@@ -24,7 +24,18 @@ class SyncStatusBadge extends ConsumerWidget {
           loading: () => 'Syncing...',
           orElse: () => 'Synchronized',
         ),
-        child: Icon(icon, color: color, size: 20),
+        child: InkWell(
+          onTap: () {
+            ref.read(vaultNotifierProvider.notifier).pushDirtyToRemote().then((_) {
+              ref.read(vaultNotifierProvider.notifier).pullFromRemote();
+            });
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Icon(icon, color: color, size: 20),
+          ),
+        ),
       ),
     );
   }
