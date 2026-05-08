@@ -1,5 +1,6 @@
 # Secrets
 lib/core/constants/env.dart
+secrets.json
 
 # Flutter / Dart
 .dart_tool/
