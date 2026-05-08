@@ -7,6 +7,8 @@ import 'package:budasswords/core/constants/app_colors.dart';
 import 'package:budasswords/providers/vault_provider.dart';
 import 'package:budasswords/ui/widgets/vault/entry_card.dart';
 import 'package:budasswords/ui/widgets/vault/sync_status_badge.dart';
+import 'package:budasswords/providers/selection_provider.dart';
+import 'package:budasswords/providers/pinned_provider.dart';
 
 class VaultScreen extends ConsumerStatefulWidget {
   const VaultScreen({super.key});
@@ -35,25 +37,77 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
   @override
   Widget build(BuildContext context) {
     final entriesAsync = ref.watch(filteredEntriesProvider);
+    final selection = ref.watch(selectionProvider);
+    final isSelectionMode = selection.isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.bg0,
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Image.asset('assets/logo.png', width: 24, height: 24),
-            const Gap(8),
-            const Text('Budasswords'),
-          ],
-        ),
-        actions: [
-          const SyncStatusBadge(),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => context.push('/settings'),
-          ),
-        ],
-      ),
+      appBar: isSelectionMode
+          ? AppBar(
+              backgroundColor: AppColors.accentDim.withOpacity(0.3),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => ref.read(selectionProvider.notifier).clear(),
+              ),
+              title: Text('${selection.length} selected'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.push_pin_outlined),
+                  tooltip: 'Toggle pin selected',
+                  onPressed: () {
+                    ref.read(pinnedProvider.notifier).toggleMultiple(selection.toList());
+                    ref.read(selectionProvider.notifier).clear();
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+                  tooltip: 'Delete selected',
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        backgroundColor: AppColors.bg2,
+                        title: const Text('Delete Entries?'),
+                        content: Text('Are you sure you want to delete ${selection.length} entries?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Delete All', style: TextStyle(color: AppColors.danger)),
+                          ),
+                        ],
+                      ),
+                    );
+                    
+                    if (confirm == true) {
+                      for (var id in selection) {
+                        ref.read(vaultNotifierProvider.notifier).deleteEntry(id);
+                      }
+                      ref.read(selectionProvider.notifier).clear();
+                    }
+                  },
+                ),
+              ],
+            )
+          : AppBar(
+              title: Row(
+                children: [
+                  Image.asset('assets/logo.png', width: 24, height: 24),
+                  const Gap(8),
+                  const Text('Budasswords'),
+                ],
+              ),
+              actions: [
+                const SyncStatusBadge(),
+                IconButton(
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: () => context.push('/settings'),
+                ),
+              ],
+            ),
       body: Column(
         children: [
           // ── Search bar ──
@@ -112,11 +166,13 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/entry-form'),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Entry'),
-      ).animate().scale(delay: 400.ms, curve: Curves.elasticOut),
+      floatingActionButton: isSelectionMode
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => context.push('/entry-form'),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Entry'),
+            ).animate().scale(delay: 400.ms, curve: Curves.elasticOut),
     );
   }
 }

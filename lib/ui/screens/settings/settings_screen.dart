@@ -4,7 +4,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:budasswords/core/constants/app_colors.dart';
-import 'package:budasswords/core/constants/app_constants.dart';
 import 'package:budasswords/providers/auth_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
