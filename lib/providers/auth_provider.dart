@@ -145,9 +145,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
       resetAutolock();
       return true;
     } catch (e) {
+      String message = 'Setup failed. Please try again.';
+      if (e is AuthException) {
+        if (e.message.contains('User already registered')) {
+          message = 'An account with this email already exists.';
+        } else {
+          message = e.message;
+        }
+      } else {
+        message = e.toString().replaceFirst('Exception: ', '');
+      }
+
       state = state.copyWith(
-        status: AuthStatus.locked,
-        error: e.toString(),
+        status: AuthStatus.setup,
+        error: message,
       );
       return false;
     }
@@ -159,7 +170,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String email,
     required String password,
   }) async {
-    state = state.copyWith(status: AuthStatus.loading);
     try {
       final res = await Supabase.instance.client.auth.signInWithPassword(
         email: email,
@@ -181,9 +191,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(status: AuthStatus.locked);
       return true;
     } catch (e) {
+      String message = 'Authentication failed. Please check your credentials.';
+      
+      if (e is AuthException) {
+        if (e.message.contains('Invalid login credentials')) {
+          message = 'Invalid email or password.';
+        } else if (e.message.contains('Email not confirmed')) {
+          message = 'Please confirm your email address.';
+        } else {
+          message = e.message;
+        }
+      }
+
       state = state.copyWith(
-        status: AuthStatus.setup,
-        error: e.toString(),
+        error: message,
       );
       return false;
     }
@@ -253,9 +274,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
       resetAutolock();
       return true;
     } catch (e) {
+      String message = 'Unlock failed. Please try again.';
+      if (e.toString().contains('No vault found')) {
+        message = 'No vault found for this account. Please set up first.';
+      } else {
+        message = e.toString().replaceFirst('Exception: ', '');
+      }
+
       state = state.copyWith(
         status: AuthStatus.locked,
-        error: e.toString(),
+        error: message,
       );
       return false;
     }

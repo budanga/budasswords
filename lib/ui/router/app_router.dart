@@ -12,14 +12,14 @@ import 'package:budasswords/ui/screens/settings/import_screen.dart';
 import 'package:budasswords/domain/models/vault_entry.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final auth = ref.watch(authProvider);
+  final status = ref.watch(authProvider.select((s) => s.status));
 
   return GoRouter(
     initialLocation: '/splash',
     redirect: (context, state) {
       final path = state.matchedLocation;
 
-      switch (auth.status) {
+      switch (status) {
         case AuthStatus.loading:
           return path == '/splash' ? null : '/splash';
         case AuthStatus.setup:

@@ -35,6 +35,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
     setState(() => _loading = true);
 
     bool ok;
@@ -192,25 +193,8 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 class _BudLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.accent, AppColors.accentSoft],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.accent.withOpacity(0.35),
-            blurRadius: 20,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: const Icon(Icons.shield_rounded, color: Colors.white, size: 30),
-    );
+    return Image.asset('assets/logo.png', width: 56, height: 56)
+        .animate()
+        .scale(duration: 400.ms, curve: Curves.easeOutBack);
   }
 }
