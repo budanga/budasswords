@@ -9,11 +9,12 @@
 ## Features
 
 - **Master-Password Authentication**: Secure login using a single master password, hashed with Argon2id.
+- **Biometric-First Flow**: Enhanced security on mobile by requiring biometric validation before unlocking the password field.
 - **Encryption**: Vaults are encrypted using AES-256-GCM with per-entry random IVs.
+- **Intelligent Auto-lock**: Automatically wipes encryption keys from memory after a configurable period of inactivity.
 - **Offline-First Architecture**: Built with Drift (SQLite) for local storage. Access your passwords anytime, anywhere.
 - **Real-Time Sync**: Seamlessly sync across your devices using Supabase, complete with conflict resolution.
-- **Biometric Support**: Quick and secure unlocking on mobile using fingerprint or face recognition.
-- **Modern UI**: Clean, minimal, and responsive user interface built with Flutter, powered by Riverpod.
+- **Import Utility**: Easily migrate from **Bitwarden** with a fully localized English import flow.
 
 ---
 
@@ -26,6 +27,7 @@
 - **Database (Remote)**: Supabase (PostgreSQL)
 - **Cryptography**: `cryptography` & `pointycastle` (Argon2id, AES-256-GCM)
 - **Secure Storage**: `flutter_secure_storage` (Keystore / DPAPI)
+- **Animations**: `flutter_animate`
 
 ---
 
@@ -43,6 +45,7 @@
 git clone git@github.com:budanga/budasswords.git
 cd budasswords
 flutter pub get
+# Generate DB and Provider code
 dart run build_runner build --delete-conflicting-outputs
 ```
 
@@ -69,26 +72,18 @@ class Env {
 
 > **⚠️ Never commit `env.dart` — it is excluded via `.gitignore`.**
 
-### 5. Android: Enable Biometrics
 
-Ensure `android/app/src/main/AndroidManifest.xml` includes:
-```xml
-<uses-permission android:name="android.permission.USE_BIOMETRIC"/>
-```
-
-Also, `MainActivity` must extend `FlutterFragmentActivity`.
-
-### 6. Run the App
+### 5. Run the App
 
 ```bash
 # Android device / emulator
 flutter run -d android
 
-# Windows
+# Windows Desktop
 flutter run -d windows
 ```
 
-### 7. Build Release
+### 6. Build Release
 
 ```bash
 # Android APK (split by ABI for smaller files)
@@ -108,6 +103,7 @@ Budasswords is built from the ground up with a zero-knowledge security model.
 |---|---|
 | **Key Derivation** | Argon2id (64 MB memory, 3 iterations) |
 | **Vault Encryption** | AES-256-GCM, with per-entry random IV |
+| **Auto-lock Timer** | Clears memory and UI state after inactivity (1m - 3h) |
 | **Key Storage** | In-memory only; actively wiped on lock |
 | **Salt & Token Storage** | `flutter_secure_storage` (Android Keystore / Windows DPAPI) |
 | **Transport Security** | Supabase TLS 1.3 |
