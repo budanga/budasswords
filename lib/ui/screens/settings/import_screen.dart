@@ -40,13 +40,24 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     }
 
     final path = result.files.single.path!;
+    final file = File(path);
+
+    // Limit to 10MB to prevent OOM DOS
+    if (file.lengthSync() > 10 * 1024 * 1024) {
+      setState(() {
+        _state = _ImportState.error;
+        _error = 'File is too large. Maximum size is 10MB.';
+      });
+      return;
+    }
+
     setState(() {
       _filePath = path;
       _state = _ImportState.importing;
     });
 
     try {
-      final raw = await File(path).readAsString();
+      final raw = await file.readAsString();
       final json = jsonDecode(raw) as Map<String, dynamic>;
 
       final items = json['items'] as List<dynamic>?;

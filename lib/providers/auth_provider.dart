@@ -48,6 +48,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Timer? _autolockTimer;
   int _timeoutMinutes = AppConstants.autoLockMinutes;
 
+  int _failedUnlockAttempts = 0;
+  DateTime? _lockoutUntil;
+
   AuthNotifier(this._secureStorage, this._vaultDao)
       : super(const AuthState(status: AuthStatus.loading)) {
     _init();
@@ -145,20 +148,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       resetAutolock();
       return true;
     } catch (e) {
-      String message = 'Setup failed. Please try again.';
-      if (e is AuthException) {
-        if (e.message.contains('User already registered')) {
-          message = 'An account with this email already exists.';
-        } else {
-          message = e.message;
-        }
-      } else {
-        message = e.toString().replaceFirst('Exception: ', '');
-      }
-
+      // Avoid user enumeration and leaking raw exceptions
       state = state.copyWith(
         status: AuthStatus.setup,
-        error: message,
+        error: 'Setup failed. Please check your details and try again.',
       );
       return false;
     }
@@ -199,7 +192,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         } else if (e.message.contains('Email not confirmed')) {
           message = 'Please confirm your email address.';
         } else {
-          message = e.message;
+          message = 'An authentication error occurred.';
         }
       }
 
@@ -213,6 +206,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
   // ── Unlock with master password ───────────────────
 
   Future<bool> unlock(String masterPassword) async {
+    if (_lockoutUntil != null && DateTime.now().isBefore(_lockoutUntil!)) {
+      final secondsLeft = _lockoutUntil!.difference(DateTime.now()).inSeconds;
+      state = state.copyWith(
+        status: AuthStatus.locked,
+        error: 'Too many attempts. Try again in $secondsLeft seconds.',
+      );
+      return false;
+    }
+
     try {
       var saltHex = await _secureStorage.read(key: AppConstants.kSaltKey);
       var proofHex = await _secureStorage.read(key: AppConstants.kProofBlobKey);
@@ -249,12 +251,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final valid = await candidate.verifyProof(proofBlob);
       if (!valid) {
         candidate.wipe();
-        state = state.copyWith(
-          status: AuthStatus.locked,
-          error: 'Incorrect master password.',
-        );
+        _failedUnlockAttempts++;
+        if (_failedUnlockAttempts >= 5) {
+          _lockoutUntil = DateTime.now().add(const Duration(minutes: 1));
+          _failedUnlockAttempts = 0;
+          state = state.copyWith(
+            status: AuthStatus.locked,
+            error: 'Too many failed attempts. Locked out for 1 minute.',
+          );
+        } else {
+          state = state.copyWith(
+            status: AuthStatus.locked,
+            error: 'Incorrect master password.',
+          );
+        }
         return false;
       }
+
+      _failedUnlockAttempts = 0;
+      _lockoutUntil = null;
 
       // Sign in to Supabase (will refresh existing session)
       // NOTE: For a personal app, you may store Supabase creds in secure storage
@@ -278,7 +293,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (e.toString().contains('No vault found')) {
         message = 'No vault found for this account. Please set up first.';
       } else {
-        message = e.toString().replaceFirst('Exception: ', '');
+        message = 'An unexpected error occurred during unlock.';
       }
 
       state = state.copyWith(
