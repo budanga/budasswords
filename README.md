@@ -1,8 +1,8 @@
 # Budasswords
 
-> A production-quality, secure, and offline-first cross-platform personal password manager for Android and Windows.
-> 
-> Built with **Flutter**, **Supabase**, **AES-256-GCM**, and **Argon2id**.
+A production-quality, secure, and offline-first cross-platform personal password manager for Android and Windows.
+
+Built with **Flutter**, **Supabase**, **AES-256-GCM**, and **Argon2id**.
 
 ---
 
