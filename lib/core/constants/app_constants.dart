@@ -21,4 +21,5 @@ abstract class AppConstants {
   static const kProofBlobKey   = 'bud_proof';
   static const kBiometricKey   = 'bud_biometric_aes';
   static const kLockTimeoutKey = 'bud_lock_timeout';
+  static const kPinnedKey      = 'bud_pinned_entries';
 }

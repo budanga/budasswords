@@ -9,6 +9,7 @@ import '../crypto/crypto_utils.dart';
 import 'package:drift/drift.dart';
 import 'auth_provider.dart';
 import 'crypto_provider.dart';
+import 'pinned_provider.dart';
 
 // ──────────────────────────────────────────────────
 // Vault entries stream
@@ -31,14 +32,43 @@ final searchQueryProvider = StateProvider<String>((ref) => '');
 
 final filteredEntriesProvider = Provider<AsyncValue<List<VaultEntry>>>((ref) {
   final query = ref.watch(searchQueryProvider).toLowerCase();
-  final entries = ref.watch(vaultEntriesProvider);
-  return entries.whenData((list) {
-    if (query.isEmpty) return list;
-    return list.where((e) {
-      return e.title.toLowerCase().contains(query) ||
-          (e.url?.toLowerCase().contains(query) ?? false) ||
-          e.content.toLowerCase().contains(query);
-    }).toList();
+  final entriesAsync = ref.watch(vaultEntriesProvider);
+  final pinned = ref.watch(pinnedProvider);
+
+  return entriesAsync.whenData((list) {
+    var filtered = List<VaultEntry>.from(list);
+    
+    if (query.isNotEmpty) {
+      filtered = filtered.where((e) {
+        return e.title.toLowerCase().contains(query) ||
+            (e.url?.toLowerCase().contains(query) ?? false) ||
+            e.content.toLowerCase().contains(query);
+      }).toList();
+    }
+
+    filtered.sort((a, b) {
+      final aPinned = pinned[a.id];
+      final bPinned = pinned[b.id];
+      
+      if (aPinned != null && bPinned != null) {
+        return bPinned.compareTo(aPinned); // Most recently pinned first
+      } else if (aPinned != null) {
+        return -1;
+      } else if (bPinned != null) {
+        return 1;
+      } else {
+        int cmp = b.updatedAt.compareTo(a.updatedAt);
+        if (cmp == 0) {
+          cmp = b.createdAt.compareTo(a.createdAt);
+        }
+        if (cmp == 0) {
+          cmp = a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        }
+        return cmp;
+      }
+    });
+
+    return filtered;
   });
 });
 
