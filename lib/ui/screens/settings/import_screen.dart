@@ -5,8 +5,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:gap/gap.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:budasswords/core/constants/app_colors.dart';
+import 'package:budasswords/core/localization/app_strings.dart';
 import 'package:budasswords/providers/vault_provider.dart';
+import 'package:budasswords/providers/locale_provider.dart';
 
 class ImportScreen extends ConsumerStatefulWidget {
   const ImportScreen({super.key});
@@ -23,6 +26,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   String? _error;
 
   Future<void> _pickAndImport() async {
+    final strings = ref.read(stringsProvider);
     setState(() {
       _state = _ImportState.picking;
       _error = null;
@@ -31,7 +35,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['json'],
-      dialogTitle: 'Select your Bitwarden export',
+      dialogTitle: strings.importSelectFile,
     );
 
     if (result == null || result.files.isEmpty) {
@@ -42,11 +46,10 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     final path = result.files.single.path!;
     final file = File(path);
 
-    // Limit to 10MB to prevent OOM DOS
     if (file.lengthSync() > 10 * 1024 * 1024) {
       setState(() {
         _state = _ImportState.error;
-        _error = 'File is too large. Maximum size is 10MB.';
+        _error = strings.fileTooLarge;
       });
       return;
     }
@@ -62,7 +65,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
 
       final items = json['items'] as List<dynamic>?;
       if (items == null) {
-        throw Exception('Invalid Bitwarden file format.');
+        throw Exception(strings.invalidBitwardenFormat);
       }
 
       int imported = 0;
@@ -71,7 +74,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       for (final item in items) {
         try {
           final map = item as Map<String, dynamic>;
-          final name = (map['name'] as String?) ?? 'Untitled';
+          final name = (map['name'] as String?) ?? 'Sin título';
           final notes = (map['notes'] as String?) ?? '';
           final type = map['type'] as int? ?? 0;
 
@@ -88,13 +91,13 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                   ? (uris.first as Map<String, dynamic>)['uri'] as String?
                   : null;
               final parts = <String>[];
-              if (username.isNotEmpty) parts.add('Username: $username');
-              if (password.isNotEmpty) parts.add('Password: $password');
-              if (notes.isNotEmpty) parts.add('Notes: $notes');
+              if (username.isNotEmpty) parts.add('Usuario: $username');
+              if (password.isNotEmpty) parts.add('Contraseña: $password');
+              if (notes.isNotEmpty) parts.add('Notas: $notes');
               content = parts.join('\n');
 
             case 2: // Secure Note
-              content = notes.isNotEmpty ? notes : '(empty note)';
+              content = notes.isNotEmpty ? notes : '(nota vacía)';
 
             case 3: // Card
               final card = map['card'] as Map<String, dynamic>?;
@@ -105,14 +108,14 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
               final expYear = (card?['expYear'] as String?) ?? '';
               final cvv = (card?['code'] as String?) ?? '';
               final cardParts = <String>[];
-              if (holder.isNotEmpty) cardParts.add('Holder: $holder');
-              if (brand.isNotEmpty) cardParts.add('Brand: $brand');
-              if (number.isNotEmpty) cardParts.add('Number: $number');
+              if (holder.isNotEmpty) cardParts.add('Titular: $holder');
+              if (brand.isNotEmpty) cardParts.add('Marca: $brand');
+              if (number.isNotEmpty) cardParts.add('Número: $number');
               if (expMonth.isNotEmpty || expYear.isNotEmpty) {
-                cardParts.add('Expires: $expMonth/$expYear');
+                cardParts.add('Vencimiento: $expMonth/$expYear');
               }
               if (cvv.isNotEmpty) cardParts.add('CVV: $cvv');
-              if (notes.isNotEmpty) cardParts.add('Notes: $notes');
+              if (notes.isNotEmpty) cardParts.add('Notas: $notes');
               content = cardParts.join('\n');
 
             case 4: // Identity
@@ -122,19 +125,19 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                 if (val != null && val.isNotEmpty) idParts.add('$label: $val');
               }
               addId(
-                  'Name',
+                  'Nombre',
                   [
                     id?['title'],
                     id?['firstName'],
                     id?['middleName'],
                     id?['lastName']
                   ].whereType<String>().where((s) => s.isNotEmpty).join(' '));
-              addId('Company', id?['company']);
+              addId('Compañía', id?['company']);
               addId('Email', id?['email']);
-              addId('Phone', id?['phone']);
-              addId('SSN/Passport', id?['ssn'] ?? id?['passportNumber']);
+              addId('Teléfono', id?['phone']);
+              addId('Documento', id?['ssn'] ?? id?['passportNumber']);
               addId(
-                  'Address',
+                  'Dirección',
                   [
                     id?['address1'],
                     id?['address2'],
@@ -143,12 +146,11 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                     id?['postalCode'],
                     id?['country']
                   ].whereType<String>().where((s) => s.isNotEmpty).join(', '));
-              if (notes.isNotEmpty) idParts.add('Notes: $notes');
+              if (notes.isNotEmpty) idParts.add('Notas: $notes');
               content = idParts.join('\n');
 
             default:
-              // Unknown type — save notes as fallback
-              content = notes.isNotEmpty ? notes : '(empty entry)';
+              content = notes.isNotEmpty ? notes : '(entrada vacía)';
           }
 
           await ref.read(vaultNotifierProvider.notifier).createEntry(
@@ -177,100 +179,158 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = ref.watch(stringsProvider);
+
     return Scaffold(
       backgroundColor: AppColors.bg0,
-      appBar: AppBar(title: const Text('Import from Bitwarden')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Info card
-            _InfoCard().animate().fadeIn(),
-            const Gap(24),
-
-            // Status area
-            Expanded(child: _buildBody()),
-
-            // Button
-            if (_state == _ImportState.idle ||
-                _state == _ImportState.error ||
-                _state == _ImportState.done)
-              FilledButton.icon(
-                onPressed: _state == _ImportState.done ? null : _pickAndImport,
-                icon: const Icon(Icons.file_open_outlined),
-                label: Text(
-                  _state == _ImportState.done
-                      ? 'Import complete'
-                      : 'Select JSON file',
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Column(
+              children: [
+                // Centered Header aligned with content
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 24, 16, 12),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: strings.back,
+                        icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 22),
+                        onPressed: () => Navigator.of(context).maybePop(),
+                      ),
+                      const Gap(8),
+                      Expanded(
+                        child: Text(
+                          strings.importTitle,
+                          style: GoogleFonts.newsreader(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.accent,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _InfoCard(strings: strings).animate().fadeIn(),
+                        const Gap(20),
+                        SizedBox(
+                          height: 52,
+                          child: ElevatedButton.icon(
+                            onPressed: _state == _ImportState.importing ? null : _pickAndImport,
+                            icon: const Icon(Icons.file_open_outlined, size: 20),
+                            label: Text(
+                              _state == _ImportState.done
+                                  ? strings.importCompleted
+                                  : strings.importSelectFile,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ).animate().fadeIn(delay: 150.ms),
+                        if (_state != _ImportState.idle) ...[
+                          const Gap(24),
+                          _buildBody(strings),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
-              ).animate().fadeIn(delay: 200.ms),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(AppStrings strings) {
     switch (_state) {
       case _ImportState.idle:
         return const SizedBox.shrink();
 
       case _ImportState.picking:
-        return const Center(child: CircularProgressIndicator());
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(AppColors.accent),
+            ),
+          ),
+        );
 
       case _ImportState.importing:
         return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const Gap(16),
-              const Text(
-                'Importing entries...',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-              if (_filePath != null) ...[
-                const Gap(8),
-                Text(
-                  _filePath!.split(Platform.pathSeparator).last,
-                  style: const TextStyle(
-                    color: AppColors.textDisabled,
-                    fontSize: 12,
-                  ),
-                  textAlign: TextAlign.center,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation(AppColors.accent),
                 ),
+                const Gap(16),
+                Text(
+                  strings.importingProgress,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                  ),
+                ),
+                if (_filePath != null) ...[
+                  const Gap(8),
+                  Text(
+                    _filePath!.split(Platform.pathSeparator).last,
+                    style: const TextStyle(
+                      color: AppColors.textDisabled,
+                      fontSize: 12,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         );
 
       case _ImportState.done:
-        return Center(
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.bg2,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.success.withValues(alpha: 0.4), width: 1.5),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.check_circle_outline,
-                      color: AppColors.success, size: 72)
-                  .animate()
-                  .scale(duration: 400.ms, curve: Curves.elasticOut),
-              const Gap(20),
+              const Icon(
+                Icons.check_circle_outline,
+                color: AppColors.success,
+                size: 54,
+              ).animate().scale(duration: 400.ms, curve: Curves.easeOutBack),
+              const Gap(12),
               Text(
-                '$_imported entries imported',
-                style: const TextStyle(
+                strings.importSuccess(_imported),
+                style: GoogleFonts.newsreader(
                   color: AppColors.textPrimary,
                   fontSize: 22,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               if (_skipped > 0) ...[
                 const Gap(8),
                 Text(
-                  '$_skipped entries could not be imported.',
+                  strings.importSkipped(_skipped),
                   style: const TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
@@ -279,25 +339,34 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                 ),
               ],
             ],
-          ).animate().fadeIn(),
-        );
+          ),
+        ).animate().fadeIn();
 
       case _ImportState.error:
-        return Center(
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.bg2,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.danger.withValues(alpha: 0.4), width: 1.5),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  color: AppColors.danger, size: 56),
-              const Gap(16),
+              const Icon(
+                Icons.error_outline,
+                color: AppColors.danger,
+                size: 44,
+              ),
+              const Gap(12),
               Text(
-                _error ?? 'Unknown error',
-                style: const TextStyle(color: AppColors.danger),
+                _error ?? strings.error,
+                style: const TextStyle(color: AppColors.danger, fontSize: 13.5),
                 textAlign: TextAlign.center,
               ),
             ],
-          ).animate().fadeIn(),
-        );
+          ),
+        ).animate().fadeIn();
     }
   }
 }
@@ -305,43 +374,68 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
 enum _ImportState { idle, picking, importing, done, error }
 
 class _InfoCard extends StatelessWidget {
+  final AppStrings strings;
+
+  const _InfoCard({required this.strings});
+
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.bg2,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.accent.withAlpha(60)),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border, width: 1),
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.info_outline, color: AppColors.accent, size: 20),
-              Gap(8),
+              const Icon(Icons.menu_book_outlined, color: AppColors.accent, size: 22),
+              const Gap(10),
               Text(
-                'How to export from Bitwarden',
-                style: TextStyle(
+                strings.importHowTo,
+                style: GoogleFonts.newsreader(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w600,
-                  fontSize: 14,
+                  fontSize: 18,
                 ),
               ),
             ],
           ),
-          const Gap(10),
-          _step('1', 'Open Bitwarden in your browser or app.'),
-          _step('2', 'Go to Tools → Export Vault.'),
-          _step('3', 'Choose JSON (unencrypted) format.'),
-          _step('4', 'Save the file and select it here.'),
-          const Gap(8),
-          const Text(
-            '⚠ The JSON file contains your passwords in plain text. Delete it when finished.',
-            style: TextStyle(
-              color: AppColors.danger,
-              fontSize: 12,
+          const Gap(18),
+          _step('1', strings.importStep1),
+          const Gap(12),
+          _step('2', strings.importStep2),
+          const Gap(12),
+          _step('3', strings.importStep3),
+          const Gap(12),
+          _step('4', strings.importStep4),
+          const Gap(18),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.accentDim.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 18),
+                const Gap(8),
+                Expanded(
+                  child: Text(
+                    strings.importWarning,
+                    style: const TextStyle(
+                      color: AppColors.danger,
+                      fontSize: 12.5,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -350,40 +444,42 @@ class _InfoCard extends StatelessWidget {
   }
 
   Widget _step(String n, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 20,
-            height: 20,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.accent.withAlpha(40),
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              n,
-              style: const TextStyle(
-                color: AppColors.accent,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 26,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: AppColors.accentDim,
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            n,
+            style: const TextStyle(
+              color: AppColors.accent,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const Gap(8),
-          Expanded(
+        ),
+        const Gap(12),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 3),
             child: Text(
               text,
               style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
+                color: AppColors.textPrimary,
+                fontSize: 14.5,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

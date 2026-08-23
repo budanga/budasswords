@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:budasswords/core/constants/app_colors.dart';
+import 'package:budasswords/core/localization/app_strings.dart';
+import 'package:budasswords/core/utils/clipboard_helper.dart';
 import 'package:budasswords/domain/models/vault_entry.dart';
 import 'package:budasswords/providers/vault_provider.dart';
+import 'package:budasswords/providers/pinned_provider.dart';
+import 'package:budasswords/providers/locale_provider.dart';
 import 'package:budasswords/ui/widgets/entry/secret_field.dart';
+import 'package:budasswords/ui/widgets/vault/entry_form_modal.dart';
 
 class EntryDetailScreen extends ConsumerWidget {
   final VaultEntry entry;
@@ -15,111 +20,167 @@ class EntryDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final strings = ref.watch(stringsProvider);
+    final isPinned = ref.watch(pinnedProvider).containsKey(entry.id);
+
     return Scaffold(
       backgroundColor: AppColors.bg0,
-      appBar: AppBar(
-        title: Text(entry.title),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            onPressed: () => context.push('/entry-form', extra: entry),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: AppColors.danger),
-            onPressed: () => _confirmDelete(context, ref),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Title card
-            _DetailCard(
-              label: 'Title',
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      entry.title,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                ],
-              ),
-            ).animate().fadeIn().slideY(begin: 0.05),
-            const Gap(12),
-
-            // URL
-            if (entry.url != null && entry.url!.isNotEmpty)
-              _DetailCard(
-                label: 'URL',
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        entry.url!,
-                        style: const TextStyle(
-                          color: AppColors.accentSoft,
-                          decoration: TextDecoration.underline,
-                          decorationColor: AppColors.accentSoft,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 580),
+            child: Column(
+              children: [
+                // Centered Header aligned with content
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 20, 16, 12),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: strings.back,
+                        icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 22),
+                        onPressed: () => Navigator.of(context).maybePop(),
+                      ),
+                      const Gap(8),
+                      Expanded(
+                        child: Text(
+                          entry.title,
+                          style: GoogleFonts.newsreader(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                    _CopyIconButton(text: entry.url!),
-                  ],
+                      IconButton(
+                        tooltip: isPinned ? strings.removeFromFavorites : strings.addToFavorites,
+                        icon: Icon(
+                          isPinned ? Icons.star_rounded : Icons.star_outline_rounded,
+                          color: isPinned ? const Color(0xFFFFB300) : AppColors.textSecondary,
+                          size: 22,
+                        ),
+                        onPressed: () => ref.read(pinnedProvider.notifier).togglePin(entry.id),
+                      ),
+                      IconButton(
+                        tooltip: strings.edit,
+                        icon: const Icon(Icons.edit_outlined, color: AppColors.textSecondary),
+                        onPressed: () => EntryFormModal.show(context, existingEntry: entry),
+                      ),
+                      IconButton(
+                        tooltip: strings.delete,
+                        icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+                        onPressed: () => _confirmDelete(context, ref, strings),
+                      ),
+                    ],
+                  ),
                 ),
-              )
-                  .animate(delay: 80.ms)
-                  .fadeIn()
-                  .slideY(begin: 0.05),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Title card
+                        _DetailCard(
+                  label: strings.titleLabel,
+                  child: Text(
+                    entry.title,
+                    style: GoogleFonts.newsreader(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ).animate().fadeIn().slideY(begin: 0.04),
+                const Gap(12),
 
-            if (entry.url != null && entry.url!.isNotEmpty) const Gap(12),
+                // URL
+                if (entry.url != null && entry.url!.isNotEmpty) ...[
+                  _DetailCard(
+                    label: strings.website,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            entry.url!,
+                            style: const TextStyle(
+                              color: AppColors.accent,
+                              fontSize: 14,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                        _CopyIconButton(text: entry.url!, copiedMessage: strings.copiedToClipboard),
+                      ],
+                    ),
+                  ).animate(delay: 60.ms).fadeIn().slideY(begin: 0.04),
+                  const Gap(12),
+                ],
 
-            // Secret content
-            _DetailCard(
-              label: 'Secret',
-              child: SecretField(text: entry.content),
-            )
-                .animate(delay: 160.ms)
-                .fadeIn()
-                .slideY(begin: 0.05),
+                // Secret content
+                _DetailCard(
+                  label: strings.secret,
+                  child: SecretField(text: entry.cleanContent),
+                ).animate(delay: 120.ms).fadeIn().slideY(begin: 0.04),
 
-            const Gap(24),
+                const Gap(24),
 
-            // Metadata
-            Text(
-              'Created  ${_fmt(entry.createdAt)}\nUpdated  ${_fmt(entry.updatedAt)}',
-              style: const TextStyle(
-                  color: AppColors.textDisabled, fontSize: 12),
-            ).animate(delay: 240.ms).fadeIn(),
-          ],
+                // Metadata
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.bg3,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.border, width: 1),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, size: 16, color: AppColors.textSecondary),
+                      const Gap(8),
+                      Expanded(
+                        child: Text(
+                          '${strings.createdOn} ${_fmt(entry.createdAt)} · ${strings.updatedOn} ${_fmt(entry.updatedAt)}',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ).animate(delay: 180.ms).fadeIn(),
+              ],
+            ),
+          ),
         ),
-      ),
-    );
-  }
+      ],
+    ),
+  ),
+),
+),
+);
+}
 
   String _fmt(DateTime dt) =>
-      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}  '
+      '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} '
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, AppStrings strings) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.bg2,
-        title: const Text('Delete entry?'),
-        content: const Text('This cannot be undone.'),
+        title: Text(strings.deleteEntryConfirmTitle),
+        content: Text(strings.deleteEntryConfirmContent),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(strings.cancel, style: const TextStyle(color: AppColors.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete',
-                style: TextStyle(color: AppColors.danger)),
+            child: Text(strings.delete, style: const TextStyle(color: AppColors.danger)),
           ),
         ],
       ),
@@ -142,8 +203,8 @@ class _DetailCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.bg2,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,8 +214,8 @@ class _DetailCard extends StatelessWidget {
             style: const TextStyle(
               color: AppColors.textDisabled,
               fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
             ),
           ),
           const Gap(8),
@@ -167,20 +228,20 @@ class _DetailCard extends StatelessWidget {
 
 class _CopyIconButton extends StatelessWidget {
   final String text;
-  const _CopyIconButton({required this.text});
+  final String copiedMessage;
+  const _CopyIconButton({required this.text, required this.copiedMessage});
 
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: const Icon(Icons.copy, size: 18, color: AppColors.textSecondary),
-      onPressed: () async {
-        await Clipboard.setData(ClipboardData(text: text));
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Copied to clipboard')),
-          );
-        }
-      },
+      icon: const Icon(Icons.copy_outlined, size: 18, color: AppColors.textSecondary),
+      onPressed: () => ClipboardHelper.copyPlain(
+        context,
+        text,
+        successMessage: copiedMessage,
+      ),
     );
   }
 }
+
+

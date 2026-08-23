@@ -6,74 +6,93 @@ import '../../../domain/models/vault_entry.dart';
 import '../../../providers/vault_provider.dart';
 import '../../../providers/pinned_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../providers/locale_provider.dart';
 
 /// Compact card for a vault entry in the list.
 class EntryCard extends ConsumerWidget {
   final VaultEntry entry;
-  const EntryCard({super.key, required this.entry});
+  final bool isDesktopSelected;
+  final VoidCallback? onSelectForDetail;
+
+  const EntryCard({
+    super.key,
+    required this.entry,
+    this.isDesktopSelected = false,
+    this.onSelectForDetail,
+  });
 
   void _showOptions(BuildContext context, WidgetRef ref) {
+    final strings = ref.read(stringsProvider);
     final pinned = ref.read(pinnedProvider).containsKey(entry.id);
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.bg2,
+      backgroundColor: AppColors.bg1,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(pinned ? Icons.push_pin : Icons.push_pin_outlined),
-                title: Text(pinned ? 'Unpin' : 'Pin to top'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  ref.read(pinnedProvider.notifier).togglePin(entry.id);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.check_box_outlined),
-                title: const Text('Select multiple'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  ref.read(selectionProvider.notifier).toggle(entry.id);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline, color: AppColors.danger),
-                title: const Text('Delete', style: TextStyle(color: AppColors.danger)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      backgroundColor: AppColors.bg2,
-                      title: const Text('Delete Entry?'),
-                      content: Text('Are you sure you want to delete "${entry.title}"?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('Delete', style: TextStyle(color: AppColors.danger)),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirm == true) {
-                    ref.read(vaultNotifierProvider.notifier).deleteEntry(entry.id);
-                  }
-                },
-              ),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(
+                    pinned ? Icons.star_rounded : Icons.star_outline_rounded,
+                    color: pinned ? const Color(0xFFFFB300) : AppColors.textSecondary,
+                  ),
+                  title: Text(pinned ? strings.removeFromFavorites : strings.addToFavorites),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    ref.read(pinnedProvider.notifier).togglePin(entry.id);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline, color: AppColors.danger),
+                  title: Text(strings.delete, style: const TextStyle(color: AppColors.danger)),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        backgroundColor: AppColors.bg2,
+                        title: Text(strings.deleteEntryConfirmTitle),
+                        content: Text(strings.deleteEntryConfirmContent),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: Text(strings.cancel, style: const TextStyle(color: AppColors.textSecondary)),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: Text(strings.delete, style: const TextStyle(color: AppColors.danger)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      ref.read(vaultNotifierProvider.notifier).deleteEntry(entry.id);
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
         );
       },
     );
+  }
+
+  IconData _getCategoryIcon() {
+    switch (entry.category) {
+      case EntryCategory.card:
+        return Icons.credit_card_outlined;
+      case EntryCategory.note:
+        return Icons.edit_note_outlined;
+      case EntryCategory.login:
+        return Icons.lock_outline;
+    }
   }
 
   @override
@@ -83,18 +102,21 @@ class EntryCard extends ConsumerWidget {
     final isPinned = ref.watch(pinnedProvider).containsKey(entry.id);
     final isSelectionMode = selection.isNotEmpty;
 
+    final isHighlighted = isSelected || isDesktopSelected;
+
     return Card(
-      color: isSelected ? AppColors.accentDim.withOpacity(0.2) : AppColors.bg2,
+      color: isHighlighted ? AppColors.accentDim : AppColors.bg2,
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         side: BorderSide(
-          color: isSelected ? AppColors.accent : AppColors.border,
-          width: 1,
+          color: isHighlighted ? AppColors.accent : AppColors.border,
+          width: isHighlighted ? 1.5 : 1.0,
         ),
       ),
       child: InkWell(
         mouseCursor: SystemMouseCursors.click,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         onLongPress: () {
           if (isSelectionMode) {
             ref.read(selectionProvider.notifier).toggle(entry.id);
@@ -112,38 +134,41 @@ class EntryCard extends ConsumerWidget {
         onTap: () {
           if (isSelectionMode) {
             ref.read(selectionProvider.notifier).toggle(entry.id);
+          } else if (onSelectForDetail != null) {
+            onSelectForDetail!();
           } else {
             context.push('/entry/${entry.id}', extra: entry);
           }
         },
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
             children: [
               // Icon / Checkbox
               Container(
-                width: 44,
-                height: 44,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  color: isSelected ? AppColors.accent : AppColors.accentDim.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(12),
+                  color: isSelected
+                      ? AppColors.accent
+                      : (isDesktopSelected ? AppColors.accent : AppColors.bg3),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isHighlighted ? AppColors.accent : AppColors.border,
+                    width: 1,
+                  ),
                 ),
                 child: Center(
                   child: isSelected
-                      ? const Icon(Icons.check, color: Colors.white)
-                      : Text(
-                    entry.title.isNotEmpty
-                        ? entry.title[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                      color: AppColors.accentSoft,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 18,
-                    ),
-                  ),
+                      ? const Icon(Icons.check, color: Colors.white, size: 20)
+                      : Icon(
+                          _getCategoryIcon(),
+                          color: isDesktopSelected ? Colors.white : AppColors.accent,
+                          size: 18,
+                        ),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               // Title + URL
               Expanded(
                 child: Column(
@@ -154,12 +179,12 @@ class EntryCard extends ConsumerWidget {
                       style: const TextStyle(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600,
-                        fontSize: 15,
+                        fontSize: 14.5,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (entry.url != null && entry.url!.isNotEmpty) ...[
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       Text(
                         entry.url!,
                         style: const TextStyle(
@@ -172,17 +197,29 @@ class EntryCard extends ConsumerWidget {
                   ],
                 ),
               ),
-              if (isPinned)
-                const Padding(
-                  padding: EdgeInsets.only(right: 8.0),
-                  child: Icon(Icons.push_pin, color: AppColors.accent, size: 18),
+              // Favorite Star Button
+              IconButton(
+                icon: Icon(
+                  isPinned ? Icons.star_rounded : Icons.star_outline_rounded,
+                  color: isPinned ? const Color(0xFFFFB300) : AppColors.textDisabled,
+                  size: 22,
                 ),
-              if (!isSelectionMode)
+                tooltip: isPinned ? ref.read(stringsProvider).removeFromFavorites : ref.read(stringsProvider).addToFavorites,
+                splashRadius: 18,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                onPressed: () {
+                  ref.read(pinnedProvider.notifier).togglePin(entry.id);
+                },
+              ),
+              if (!isSelectionMode && onSelectForDetail == null) ...[
+                const SizedBox(width: 4),
                 const Icon(
                   Icons.chevron_right,
                   color: AppColors.textDisabled,
-                  size: 20,
+                  size: 18,
                 ),
+              ],
             ],
           ),
         ),
@@ -190,3 +227,4 @@ class EntryCard extends ConsumerWidget {
     );
   }
 }
+
