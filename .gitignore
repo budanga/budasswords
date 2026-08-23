@@ -24,3 +24,6 @@ windows/x64/
 
 # Antigravity project memory
 .antigravity/
+
+# Node / npm
+package-lock.json
