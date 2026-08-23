@@ -150,21 +150,24 @@ void main() {
   });
 
   group('Admin Authorization & State', () {
-    test('UserSession isAdmin correctly identifies authorized owner email', () {
+    test('UserSession isAdmin correctly identifies admin role', () {
       final adminSession = UserSession(
         userId: 'admin-123',
         email: 'lautaro_budin@hotmail.com',
         unlockedAt: DateTime.now(),
+        role: 'admin',
       );
       final adminSessionCase = UserSession(
         userId: 'admin-123',
-        email: 'LAUTARO_BUDIN@HOTMAIL.COM ',
+        email: 'admin_user@example.com',
         unlockedAt: DateTime.now(),
+        role: 'ADMIN ',
       );
       final regularSession = UserSession(
         userId: 'user-456',
         email: 'regular_user@example.com',
         unlockedAt: DateTime.now(),
+        role: 'user',
       );
 
       expect(adminSession.isAdmin, isTrue);

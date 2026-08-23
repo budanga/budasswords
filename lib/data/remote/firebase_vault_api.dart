@@ -84,6 +84,16 @@ class FirebaseVaultApi {
 
   // ────────── User Profile & Directory ──────────
 
+  Future<Map<String, dynamic>?> fetchUserProfile(String userId) async {
+    try {
+      final doc = await _firestore.collection('users').doc(userId).get();
+      if (!doc.exists) return null;
+      return doc.data();
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> saveUserProfile(
     String userId, {
     required String email,
@@ -93,11 +103,14 @@ class FirebaseVaultApi {
     final docRef = _firestore.collection('users').doc(userId);
     final doc = await docRef.get();
 
+    final existingRole = doc.data()?['role'] as String?;
+    final finalRole = role ?? existingRole ?? 'user';
+
     final data = <String, dynamic>{
       'uid': userId,
       'email': email,
       'last_active_at': nowIso,
-      if (role != null) 'role': role,
+      'role': finalRole,
     };
 
     if (!doc.exists || doc.data()?['created_at'] == null) {

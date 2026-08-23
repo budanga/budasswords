@@ -21,3 +21,6 @@ android/app/google-services.json
 
 # Windows
 windows/x64/
+
+# Antigravity project memory
+.antigravity/

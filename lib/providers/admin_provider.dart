@@ -121,9 +121,14 @@ class AdminNotifier extends StateNotifier<AdminState> {
   final FirebaseVaultApi _remoteApi;
   final String? _currentUserId;
   final String? _currentUserEmail;
+  final String? _currentUserRole;
 
-  AdminNotifier([FirebaseVaultApi? remoteApi, this._currentUserId, this._currentUserEmail])
-      : _remoteApi = remoteApi ?? FirebaseVaultApi(),
+  AdminNotifier([
+    FirebaseVaultApi? remoteApi,
+    this._currentUserId,
+    this._currentUserEmail,
+    this._currentUserRole,
+  ])  : _remoteApi = remoteApi ?? FirebaseVaultApi(),
         super(const AdminState()) {
     loadData();
   }
@@ -134,9 +139,8 @@ class AdminNotifier extends StateNotifier<AdminState> {
     try {
       // 1. Ensure current user profile is synced in Firestore
       if (_currentUserId != null && _currentUserEmail != null && _currentUserId.isNotEmpty) {
-        const role = 'admin';
         try {
-          await _remoteApi.saveUserProfile(_currentUserId, email: _currentUserEmail, role: role);
+          await _remoteApi.saveUserProfile(_currentUserId, email: _currentUserEmail);
         } catch (_) {}
       }
 
@@ -213,7 +217,7 @@ class AdminNotifier extends StateNotifier<AdminState> {
         parsedUsers.add(AdminUserItem(
           uid: _currentUserId,
           email: _currentUserEmail ?? '',
-          role: 'admin',
+          role: _currentUserRole ?? 'admin',
           createdAt: DateTime.now(),
           lastActiveAt: DateTime.now(),
           entriesCount: count,
@@ -301,5 +305,5 @@ class AdminNotifier extends StateNotifier<AdminState> {
 final adminProvider = StateNotifierProvider<AdminNotifier, AdminState>((ref) {
   final authState = ref.watch(authProvider);
   final session = authState.session;
-  return AdminNotifier(null, session?.userId, session?.email);
+  return AdminNotifier(null, session?.userId, session?.email, session?.role);
 });

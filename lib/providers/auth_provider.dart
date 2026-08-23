@@ -180,11 +180,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         proofHex: CryptoUtils.toHex(proof),
       );
 
-      // Save user profile in Firestore users directory
-      final role = AppConstants.kAdminEmails.contains(email.trim().toLowerCase()) ? 'admin' : 'user';
+      // Save user profile in Firestore users directory (preserving existing role or defaulting to 'user')
       try {
-        await _remoteApi.saveUserProfile(user.uid, email: email, role: role);
+        await _remoteApi.saveUserProfile(user.uid, email: email);
       } catch (_) {}
+
+      final profile = await _remoteApi.fetchUserProfile(user.uid);
+      final role = profile?['role'] as String? ?? 'user';
+      await _secureStorage.write(key: AppConstants.kRoleKey, value: role);
 
       // 4. Persist salt + proof + user info locally
       await _secureStorage.write(
@@ -216,6 +219,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           userId: user.uid,
           email: email,
           unlockedAt: DateTime.now(),
+          role: role,
         ),
       );
       resetAutolock();
@@ -271,11 +275,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         value: email,
       );
 
-      // Save/update user profile in Firestore users directory
-      final role = AppConstants.kAdminEmails.contains(email.trim().toLowerCase()) ? 'admin' : 'user';
+      // Save/update user profile in Firestore users directory (preserving existing role or defaulting to 'user')
       try {
-        await _remoteApi.saveUserProfile(user.uid, email: email, role: role);
+        await _remoteApi.saveUserProfile(user.uid, email: email);
       } catch (_) {}
+
+      final profile = await _remoteApi.fetchUserProfile(user.uid);
+      final role = profile?['role'] as String? ?? 'user';
+      await _secureStorage.write(key: AppConstants.kRoleKey, value: role);
 
       // Check if we need to pull salt/proof from Firestore
       final meta = await _remoteApi.fetchVaultMetadata(user.uid);
@@ -447,12 +454,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await _secureStorage.write(key: AppConstants.kUserIdKey, value: userId);
       }
 
+      var role = await _secureStorage.read(key: AppConstants.kRoleKey) ?? 'user';
+      if (firebaseUser != null) {
+        final profile = await _remoteApi.fetchUserProfile(firebaseUser.uid);
+        if (profile != null && profile['role'] != null) {
+          role = profile['role'] as String;
+          await _secureStorage.write(key: AppConstants.kRoleKey, value: role);
+        }
+      }
+
       state = state.copyWith(
         status: AuthStatus.unlocked,
         session: UserSession(
           userId: userId,
           email: email,
           unlockedAt: DateTime.now(),
+          role: role,
         ),
       );
       resetAutolock();
