@@ -23,13 +23,26 @@ class VaultDao {
 
   Stream<List<VaultEntry>> watchAll(String userId) {
     return (_db.select(_db.vaultEntries)
-          ..where((t) => t.userId.equals(userId) & t.deletedAt.isNull())
+          ..where((t) => t.deletedAt.isNull())
           ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
         .watch()
         .asyncMap((rows) async {
       final result = <VaultEntry>[];
       for (final row in rows) {
-        result.add(await _decrypt(row));
+        try {
+          final entry = await _decrypt(row);
+          if (userId.isNotEmpty && row.userId != userId) {
+            // Auto-migrate legacy or offline entries to current user ID
+            await (_db.update(_db.vaultEntries)..where((t) => t.id.equals(row.id)))
+                .write(VaultEntriesCompanion(
+              userId: Value(userId),
+              isDirty: const Value(1),
+            ));
+          }
+          result.add(entry);
+        } catch (_) {
+          // Skip entry if it cannot be decrypted with the current master key
+        }
       }
       return result;
     });
@@ -78,18 +91,30 @@ class VaultDao {
   }
 
   Future<void> softDelete(String id) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await (_db.update(_db.vaultEntries)..where((t) => t.id.equals(id)))
-        .write(VaultEntriesCompanion(
-      deletedAt: Value(now),
-      isDirty: const Value(1),
-    ));
+    await (_db.delete(_db.vaultEntries)..where((t) => t.id.equals(id))).go();
+  }
+
+  Future<void> hardDelete(String id) async {
+    await (_db.delete(_db.vaultEntries)..where((t) => t.id.equals(id))).go();
   }
 
   Future<List<VaultEntryData>> getDirtyEntries(String userId) {
     return (_db.select(_db.vaultEntries)
-          ..where((t) => t.userId.equals(userId) & t.isDirty.equals(1)))
+          ..where((t) => (t.userId.equals(userId) | t.userId.equals('offline')) & t.isDirty.equals(1)))
         .get();
+  }
+
+  /// Returns all active local entries regardless of dirty flag (for full cloud migration/sync).
+  Future<List<VaultEntryData>> getAllActiveEntries() {
+    return (_db.select(_db.vaultEntries)
+          ..where((t) => t.deletedAt.isNull()))
+        .get();
+  }
+
+  /// Clears all local vault and sync entries (used on logout/reset).
+  Future<void> clearAll() async {
+    await _db.delete(_db.vaultEntries).go();
+    await _db.delete(_db.syncQueue).go();
   }
 
   // ─────────────────────────── Decrypt ──────────────────────────────

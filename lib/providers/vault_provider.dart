@@ -1,10 +1,11 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../domain/models/vault_entry.dart';
 import '../data/local/daos/vault_dao.dart';
 import '../data/local/database.dart';
-import '../data/remote/supabase_vault_api.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../data/remote/firebase_vault_api.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../crypto/crypto_utils.dart';
 import 'package:drift/drift.dart';
 import 'auth_provider.dart';
@@ -78,19 +79,30 @@ final filteredEntriesProvider = Provider<AsyncValue<List<VaultEntry>>>((ref) {
 
 class VaultNotifier extends StateNotifier<AsyncValue<void>> {
   final VaultDao _dao;
-  final SupabaseVaultApi _api;
+  final FirebaseVaultApi _api;
   final String _userId;
 
-  RealtimeChannel? _channel;
+  StreamSubscription? _subscription;
+
+  bool get _canSyncRemote {
+    final user = FirebaseAuth.instance.currentUser;
+    return user != null && user.uid == _userId && _userId.isNotEmpty;
+  }
 
   VaultNotifier(this._dao, this._api, this._userId)
       : super(const AsyncData(null)) {
-    if (_userId.isNotEmpty) {
-      _channel = _api.watchChanges(_userId, (remoteData) async {
+    if (_canSyncRemote) {
+      _subscription = _api.watchChanges(_userId, (remoteData) async {
         try {
           for (final row in remoteData) {
+            final id = row['id'] as String;
+            if (row['deleted_at'] != null) {
+              await _dao.hardDelete(id);
+              await _api.delete(_userId, id);
+              continue;
+            }
             final companion = VaultEntriesCompanion(
-              id: Value(row['id'] as String),
+              id: Value(id),
               userId: Value(row['user_id'] as String),
               titleEnc: Value(_parseBlob(row['title_enc'])),
               urlEnc: Value(
@@ -101,9 +113,7 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
                   DateTime.parse(row['created_at']).millisecondsSinceEpoch),
               updatedAt: Value(
                   DateTime.parse(row['updated_at']).millisecondsSinceEpoch),
-              deletedAt: Value(row['deleted_at'] != null
-                  ? DateTime.parse(row['deleted_at']).millisecondsSinceEpoch
-                  : null),
+              deletedAt: const Value(null),
               serverRev: Value(row['server_rev'] as int? ?? 1),
             );
             await _dao.upsertRaw(companion);
@@ -115,7 +125,7 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
 
   @override
   void dispose() {
-    _channel?.unsubscribe();
+    _subscription?.cancel();
     super.dispose();
   }
 
@@ -160,8 +170,10 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
   Future<void> deleteEntry(String id) async {
     state = const AsyncLoading();
     try {
-      await _dao.softDelete(id);
-      await _api.softDelete(id);
+      await _dao.hardDelete(id);
+      if (_canSyncRemote) {
+        await _api.delete(_userId, id);
+      }
       state = const AsyncData(null);
     } catch (e, st) {
       state = AsyncError(e, st);
@@ -169,25 +181,27 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
   }
 
   Future<void> _syncEntry(VaultEntry entry) async {
-    // Just trigger a full push of all dirty entries
-    await pushDirtyToRemote();
-    await pullFromRemote();
+    if (_canSyncRemote) {
+      await pushDirtyToRemote();
+      await pullFromRemote();
+    }
   }
 
   Future<void> pushDirtyToRemote() async {
+    if (!_canSyncRemote) return;
     try {
       final dirty = await _dao.getDirtyEntries(_userId);
       for (final row in dirty) {
         try {
           await _api.upsert({
             'id': row.id,
-            'user_id': row.userId,
-            'title_enc': '\\x${CryptoUtils.toHex(row.titleEnc)}',
+            'user_id': _userId,
+            'title_enc': CryptoUtils.toHex(row.titleEnc),
             'url_enc': row.urlEnc != null
-                ? '\\x${CryptoUtils.toHex(row.urlEnc!)}'
+                ? CryptoUtils.toHex(row.urlEnc!)
                 : null,
-            'content_enc': '\\x${CryptoUtils.toHex(row.contentEnc)}',
-            'iv': '\\x${CryptoUtils.toHex(row.iv)}',
+            'content_enc': CryptoUtils.toHex(row.contentEnc),
+            'iv': CryptoUtils.toHex(row.iv),
             'created_at': DateTime.fromMillisecondsSinceEpoch(row.createdAt)
                 .toIso8601String(),
             'updated_at': DateTime.fromMillisecondsSinceEpoch(row.updatedAt)
@@ -199,25 +213,67 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
             'server_rev': row.serverRev,
           });
           await _dao.markClean(row.id);
-        } catch (e, st) {
-          // If a single row fails, keep trying others.
-          print('Push failed for ${row.id}: $e\n$st');
+        } catch (_) {
+          // Keep trying other rows
         }
       }
-    } catch (e, st) {
-      // Offline or db error
-      print('pushDirtyToRemote failed overall: $e\n$st');
+    } catch (_) {
+      // Offline or sync error
+    }
+  }
+
+  Future<void> pushAllToRemote() async {
+    if (!_canSyncRemote) return;
+    try {
+      final all = await _dao.getAllActiveEntries();
+      for (final row in all) {
+        try {
+          await _api.upsert({
+            'id': row.id,
+            'user_id': _userId,
+            'title_enc': CryptoUtils.toHex(row.titleEnc),
+            'url_enc': row.urlEnc != null
+                ? CryptoUtils.toHex(row.urlEnc!)
+                : null,
+            'content_enc': CryptoUtils.toHex(row.contentEnc),
+            'iv': CryptoUtils.toHex(row.iv),
+            'created_at': DateTime.fromMillisecondsSinceEpoch(row.createdAt)
+                .toIso8601String(),
+            'updated_at': DateTime.fromMillisecondsSinceEpoch(row.updatedAt)
+                .toIso8601String(),
+            'deleted_at': row.deletedAt != null
+                ? DateTime.fromMillisecondsSinceEpoch(row.deletedAt!)
+                    .toIso8601String()
+                : null,
+            'server_rev': row.serverRev,
+          });
+          await _dao.markClean(row.id);
+        } catch (_) {
+          // Keep trying other rows
+        }
+      }
+    } catch (_) {
+      // Offline or sync error
     }
   }
 
   Future<void> pullFromRemote() async {
+    if (!_canSyncRemote) {
+      state = const AsyncData(null);
+      return;
+    }
     state = const AsyncLoading();
     try {
       final remoteData = await _api.fetchAll(_userId);
       for (final row in remoteData) {
-        // Map Supabase Map to Drift Companion
+        final id = row['id'] as String;
+        if (row['deleted_at'] != null) {
+          await _dao.hardDelete(id);
+          await _api.delete(_userId, id);
+          continue;
+        }
         final companion = VaultEntriesCompanion(
-          id: Value(row['id'] as String),
+          id: Value(id),
           userId: Value(row['user_id'] as String),
           titleEnc: Value(_parseBlob(row['title_enc'])),
           urlEnc:
@@ -228,16 +284,13 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
               Value(DateTime.parse(row['created_at']).millisecondsSinceEpoch),
           updatedAt:
               Value(DateTime.parse(row['updated_at']).millisecondsSinceEpoch),
-          deletedAt: Value(row['deleted_at'] != null
-              ? DateTime.parse(row['deleted_at']).millisecondsSinceEpoch
-              : null),
+          deletedAt: const Value(null),
           serverRev: Value(row['server_rev'] as int? ?? 1),
         );
         await _dao.upsertRaw(companion);
       }
       state = const AsyncData(null);
     } catch (e, st) {
-      print('pullFromRemote failed: $e\n$st');
       state = AsyncError(e, st);
     }
   }
@@ -257,14 +310,18 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
 final vaultNotifierProvider =
     StateNotifierProvider<VaultNotifier, AsyncValue<void>>((ref) {
   final dao = ref.watch(vaultDaoProvider);
-  final api = ref.watch(supabaseVaultApiProvider);
+  final api = ref.watch(firebaseVaultApiProvider);
   final auth = ref.watch(authProvider);
   final userId = auth.session?.userId ?? '';
 
   final notifier = VaultNotifier(dao, api, userId);
 
-  // Trigger initial sync if unlocked
-  if (auth.status == AuthStatus.unlocked && userId.isNotEmpty) {
+  // Trigger initial sync if unlocked and authenticated with Firebase
+  final firebaseUser = FirebaseAuth.instance.currentUser;
+  if (auth.status == AuthStatus.unlocked &&
+      userId.isNotEmpty &&
+      firebaseUser != null &&
+      firebaseUser.uid == userId) {
     Future.microtask(() async {
       await notifier.pushDirtyToRemote();
       await notifier.pullFromRemote();
@@ -273,3 +330,5 @@ final vaultNotifierProvider =
 
   return notifier;
 });
+
+

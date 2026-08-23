@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:uuid/uuid.dart';
 import 'package:budasswords/core/constants/app_constants.dart';
+import 'package:budasswords/core/localization/app_strings.dart';
 import 'package:budasswords/crypto/key_derivation.dart';
 import 'package:budasswords/crypto/vault_cipher.dart';
 import 'package:budasswords/crypto/crypto_utils.dart';
 import 'package:budasswords/domain/models/user_session.dart';
 import 'package:budasswords/data/local/daos/vault_dao.dart';
+import 'package:budasswords/data/remote/firebase_vault_api.dart';
 import 'package:budasswords/providers/crypto_provider.dart';
 
 // ──────────────────────────────────────────────────
@@ -16,23 +19,70 @@ import 'package:budasswords/providers/crypto_provider.dart';
 
 enum AuthStatus { loading, setup, locked, unlocked }
 
+enum AuthErrorCode {
+  none,
+  incorrectPassword,
+  tooManyAttempts,
+  lockoutActive,
+  invalidCredentials,
+  emailNotConfirmed,
+  setupFailed,
+  noVaultFound,
+  unknown,
+}
+
 class AuthState {
   final AuthStatus status;
   final UserSession? session;
   final String? error;
+  final AuthErrorCode? errorCode;
+  final int? lockoutSeconds;
 
   const AuthState({
     required this.status,
     this.session,
     this.error,
+    this.errorCode,
+    this.lockoutSeconds,
   });
 
-  AuthState copyWith(
-          {AuthStatus? status, UserSession? session, String? error}) =>
+  String? getLocalizedError(AppStrings strings) {
+    if (errorCode == null) return error;
+    switch (errorCode!) {
+      case AuthErrorCode.none:
+        return null;
+      case AuthErrorCode.incorrectPassword:
+        return strings.incorrectPassword;
+      case AuthErrorCode.tooManyAttempts:
+        return strings.tooManyFailedAttempts;
+      case AuthErrorCode.lockoutActive:
+        return strings.lockoutCountdown(lockoutSeconds ?? 60);
+      case AuthErrorCode.invalidCredentials:
+        return strings.invalidCredentials;
+      case AuthErrorCode.emailNotConfirmed:
+        return strings.emailNotConfirmed;
+      case AuthErrorCode.setupFailed:
+        return strings.setupFailed;
+      case AuthErrorCode.noVaultFound:
+        return strings.noVaultFound;
+      case AuthErrorCode.unknown:
+        return error ?? strings.operationFailed;
+    }
+  }
+
+  AuthState copyWith({
+    AuthStatus? status,
+    UserSession? session,
+    String? error,
+    AuthErrorCode? errorCode,
+    int? lockoutSeconds,
+  }) =>
       AuthState(
         status: status ?? this.status,
         session: session ?? this.session,
         error: error,
+        errorCode: errorCode,
+        lockoutSeconds: lockoutSeconds,
       );
 }
 
@@ -43,6 +93,7 @@ class AuthState {
 class AuthNotifier extends StateNotifier<AuthState> {
   final FlutterSecureStorage _secureStorage;
   final VaultDao _vaultDao;
+  final FirebaseVaultApi _remoteApi;
 
   VaultCipher? _cipher;
   Timer? _autolockTimer;
@@ -51,8 +102,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   int _failedUnlockAttempts = 0;
   DateTime? _lockoutUntil;
 
-  AuthNotifier(this._secureStorage, this._vaultDao)
-      : super(const AuthState(status: AuthStatus.loading)) {
+  AuthNotifier(this._secureStorage, this._vaultDao, [FirebaseVaultApi? remoteApi])
+      : _remoteApi = remoteApi ?? FirebaseVaultApi(),
+        super(const AuthState(status: AuthStatus.loading)) {
     _init();
   }
 
@@ -113,18 +165,28 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _cipher = VaultCipher(keyBytes);
       final proof = await _cipher!.createProof();
 
-      // 2. Create Supabase account with metadata
-      final res = await Supabase.instance.client.auth.signUp(
+      // 2. Create Firebase Auth account
+      final userCred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email,
         password: password,
-        data: {
-          'vault_salt': CryptoUtils.toHex(salt),
-          'vault_proof': CryptoUtils.toHex(proof),
-        },
       );
-      if (res.user == null) throw Exception('Sign-up failed');
+      final user = userCred.user;
+      if (user == null) throw Exception('Sign-up failed');
 
-      // 3. Persist salt + proof locally
+      // 3. Save salt and proof to Firestore metadata document
+      await _remoteApi.saveVaultMetadata(
+        user.uid,
+        saltHex: CryptoUtils.toHex(salt),
+        proofHex: CryptoUtils.toHex(proof),
+      );
+
+      // Save user profile in Firestore users directory
+      final role = AppConstants.kAdminEmails.contains(email.trim().toLowerCase()) ? 'admin' : 'user';
+      try {
+        await _remoteApi.saveUserProfile(user.uid, email: email, role: role);
+      } catch (_) {}
+
+      // 4. Persist salt + proof + user info locally
       await _secureStorage.write(
         key: AppConstants.kSaltKey,
         value: CryptoUtils.toHex(salt),
@@ -133,6 +195,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
         key: AppConstants.kProofBlobKey,
         value: CryptoUtils.toHex(proof),
       );
+      await _secureStorage.write(
+        key: AppConstants.kUserIdKey,
+        value: user.uid,
+      );
+      await _secureStorage.write(
+        key: AppConstants.kEmailKey,
+        value: email,
+      );
+
+      // 5. Clear any old data from previous accounts
+      await _vaultDao.clearAll();
 
       // 6. Unlock DAO
       _vaultDao.setCipher(_cipher!);
@@ -140,7 +213,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         status: AuthStatus.unlocked,
         session: UserSession(
-          userId: res.user!.id,
+          userId: user.uid,
           email: email,
           unlockedAt: DateTime.now(),
         ),
@@ -148,10 +221,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
       resetAutolock();
       return true;
     } catch (e) {
-      // Avoid user enumeration and leaking raw exceptions
+      AuthErrorCode code = AuthErrorCode.setupFailed;
+      String message = 'Setup failed. Please check your details and try again.';
+
+      if (e is FirebaseAuthException) {
+        if (e.code == 'email-already-in-use') {
+          message = 'An account with this email already exists.';
+        } else if (e.code == 'weak-password') {
+          message = 'Password should be at least 6 characters.';
+        } else if (e.code == 'invalid-email') {
+          message = 'Please enter a valid email address.';
+        } else if (e.code == 'internal-error' || e.code == 'invalid-credential') {
+          message = 'Registration failed. Please check your email and password format.';
+        } else if (e.code == 'network-request-failed') {
+          message = 'Network error. Please check your internet connection.';
+        }
+      }
+
       state = state.copyWith(
         status: AuthStatus.setup,
-        error: 'Setup failed. Please check your details and try again.',
+        error: message,
+        errorCode: code,
       );
       return false;
     }
@@ -164,42 +254,109 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String password,
   }) async {
     try {
-      final res = await Supabase.instance.client.auth.signInWithPassword(
+      final userCred = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
-      if (res.user == null) throw Exception('Login failed');
+      final user = userCred.user;
+      if (user == null) throw Exception('Login failed');
 
-      // Check if we need to pull salt/proof from metadata
-      final metadata = res.user!.userMetadata;
-      final saltHex = metadata?['vault_salt'] as String?;
-      final proofHex = metadata?['vault_proof'] as String?;
+      // Persist user id and email
+      await _secureStorage.write(
+        key: AppConstants.kUserIdKey,
+        value: user.uid,
+      );
+      await _secureStorage.write(
+        key: AppConstants.kEmailKey,
+        value: email,
+      );
 
-      if (saltHex != null && proofHex != null) {
-        await _secureStorage.write(key: AppConstants.kSaltKey, value: saltHex);
-        await _secureStorage.write(
-            key: AppConstants.kProofBlobKey, value: proofHex);
+      // Save/update user profile in Firestore users directory
+      final role = AppConstants.kAdminEmails.contains(email.trim().toLowerCase()) ? 'admin' : 'user';
+      try {
+        await _remoteApi.saveUserProfile(user.uid, email: email, role: role);
+      } catch (_) {}
+
+      // Check if we need to pull salt/proof from Firestore
+      final meta = await _remoteApi.fetchVaultMetadata(user.uid);
+      if (meta != null) {
+        final saltHex = meta['vault_salt'] as String?;
+        final proofHex = meta['vault_proof'] as String?;
+
+        if (saltHex != null && proofHex != null) {
+          await _secureStorage.write(key: AppConstants.kSaltKey, value: saltHex);
+          await _secureStorage.write(
+              key: AppConstants.kProofBlobKey, value: proofHex);
+        }
       }
 
       state = state.copyWith(status: AuthStatus.locked);
       return true;
     } catch (e) {
       String message = 'Authentication failed. Please check your credentials.';
-      
-      if (e is AuthException) {
-        if (e.message.contains('Invalid login credentials')) {
-          message = 'Invalid email or password.';
-        } else if (e.message.contains('Email not confirmed')) {
-          message = 'Please confirm your email address.';
-        } else {
-          message = 'An authentication error occurred.';
+      AuthErrorCode code = AuthErrorCode.invalidCredentials;
+
+      if (e is FirebaseAuthException) {
+        switch (e.code) {
+          case 'user-not-found':
+          case 'wrong-password':
+          case 'invalid-credential':
+          case 'invalid-password':
+          case 'INVALID_LOGIN_CREDENTIALS':
+            message = 'Incorrect email or account password.';
+            code = AuthErrorCode.invalidCredentials;
+            break;
+          case 'invalid-email':
+            message = 'The email address is invalid.';
+            code = AuthErrorCode.invalidCredentials;
+            break;
+          case 'user-disabled':
+            message = 'This user account has been disabled.';
+            code = AuthErrorCode.invalidCredentials;
+            break;
+          case 'too-many-requests':
+            message = 'Too many failed attempts. Please try again later.';
+            code = AuthErrorCode.tooManyAttempts;
+            break;
+          case 'network-request-failed':
+            message = 'Network error. Please check your internet connection.';
+            code = AuthErrorCode.unknown;
+            break;
+          case 'internal-error':
+            message = 'Authentication failed. Check that your email and password are correct.';
+            code = AuthErrorCode.invalidCredentials;
+            break;
+          default:
+            message = 'Authentication failed. Please verify your email and password.';
+            code = AuthErrorCode.invalidCredentials;
         }
+      } else {
+        message = 'Authentication failed. Please check your credentials.';
+        code = AuthErrorCode.invalidCredentials;
       }
 
       state = state.copyWith(
         error: message,
+        errorCode: code,
       );
       return false;
+    }
+  }
+
+  /// Manually update vault salt and proof (used during legacy migration)
+  Future<void> updateVaultMeta({
+    required String saltHex,
+    required String proofHex,
+  }) async {
+    await _secureStorage.write(key: AppConstants.kSaltKey, value: saltHex);
+    await _secureStorage.write(key: AppConstants.kProofBlobKey, value: proofHex);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await _remoteApi.saveVaultMetadata(
+        user.uid,
+        saltHex: saltHex,
+        proofHex: proofHex,
+      );
     }
   }
 
@@ -211,6 +368,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         status: AuthStatus.locked,
         error: 'Too many attempts. Try again in $secondsLeft seconds.',
+        errorCode: AuthErrorCode.lockoutActive,
+        lockoutSeconds: secondsLeft,
       );
       return false;
     }
@@ -219,18 +378,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
       var saltHex = await _secureStorage.read(key: AppConstants.kSaltKey);
       var proofHex = await _secureStorage.read(key: AppConstants.kProofBlobKey);
 
-      // If missing locally, try to fetch from Supabase metadata
+      // If missing locally, try to fetch from Firestore metadata
       if (saltHex == null || proofHex == null) {
-        final user = Supabase.instance.client.auth.currentUser;
+        final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
-          saltHex = user.userMetadata?['vault_salt'] as String?;
-          proofHex = user.userMetadata?['vault_proof'] as String?;
+          final meta = await _remoteApi.fetchVaultMetadata(user.uid);
+          if (meta != null) {
+            saltHex = meta['vault_salt'] as String?;
+            proofHex = meta['vault_proof'] as String?;
 
-          if (saltHex != null && proofHex != null) {
-            await _secureStorage.write(
-                key: AppConstants.kSaltKey, value: saltHex);
-            await _secureStorage.write(
-                key: AppConstants.kProofBlobKey, value: proofHex);
+            if (saltHex != null && proofHex != null) {
+              await _secureStorage.write(
+                  key: AppConstants.kSaltKey, value: saltHex);
+              await _secureStorage.write(
+                  key: AppConstants.kProofBlobKey, value: proofHex);
+            }
           }
         }
       }
@@ -258,11 +420,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
           state = state.copyWith(
             status: AuthStatus.locked,
             error: 'Too many failed attempts. Locked out for 1 minute.',
+            errorCode: AuthErrorCode.tooManyAttempts,
           );
         } else {
           state = state.copyWith(
             status: AuthStatus.locked,
             error: 'Incorrect master password.',
+            errorCode: AuthErrorCode.incorrectPassword,
           );
         }
         return false;
@@ -271,18 +435,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _failedUnlockAttempts = 0;
       _lockoutUntil = null;
 
-      // Sign in to Supabase (will refresh existing session)
-      // NOTE: For a personal app, you may store Supabase creds in secure storage
-      // or require email+password on first unlock after install.
       _cipher = candidate;
       _vaultDao.setCipher(_cipher!);
 
-      final supaUser = Supabase.instance.client.auth.currentUser;
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      var userId = firebaseUser?.uid ?? await _secureStorage.read(key: AppConstants.kUserIdKey);
+      final email = firebaseUser?.email ?? (await _secureStorage.read(key: AppConstants.kEmailKey) ?? '');
+
+      if (userId == null || userId == 'offline') {
+        userId = const Uuid().v4();
+        await _secureStorage.write(key: AppConstants.kUserIdKey, value: userId);
+      }
+
       state = state.copyWith(
         status: AuthStatus.unlocked,
         session: UserSession(
-          userId: supaUser?.id ?? 'offline',
-          email: supaUser?.email ?? '',
+          userId: userId,
+          email: email,
           unlockedAt: DateTime.now(),
         ),
       );
@@ -318,8 +487,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> signOut() async {
     lock();
-    await Supabase.instance.client.auth.signOut();
-    await _secureStorage.deleteAll();
+    await FirebaseAuth.instance.signOut();
+    await _secureStorage.delete(key: AppConstants.kSaltKey);
+    await _secureStorage.delete(key: AppConstants.kProofBlobKey);
+    await _secureStorage.delete(key: AppConstants.kUserIdKey);
+    await _secureStorage.delete(key: AppConstants.kEmailKey);
+    await _secureStorage.delete(key: AppConstants.kBiometricKey);
+    await _secureStorage.delete(key: AppConstants.kPinnedKey);
+    await _vaultDao.clearAll();
     state = const AuthState(status: AuthStatus.setup);
   }
 
@@ -334,5 +509,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   const storage = FlutterSecureStorage();
   final dao = ref.watch(vaultDaoProvider);
-  return AuthNotifier(storage, dao);
+  final api = ref.watch(firebaseVaultApiProvider);
+  return AuthNotifier(storage, dao, api);
 });
+

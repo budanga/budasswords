@@ -22,4 +22,12 @@ abstract class AppConstants {
   static const kBiometricKey   = 'bud_biometric_aes';
   static const kLockTimeoutKey = 'bud_lock_timeout';
   static const kPinnedKey      = 'bud_pinned_entries';
+  static const kUserIdKey      = 'bud_user_id';
+  static const kEmailKey       = 'bud_user_email';
+
+  // Admin access
+  static const Set<String> kAdminEmails = {
+    'lautaro_budin@hotmail.com',
+  };
 }
+

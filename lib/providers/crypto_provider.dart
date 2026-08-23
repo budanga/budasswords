@@ -1,8 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/local/database.dart';
 import '../data/local/daos/vault_dao.dart';
-import '../data/remote/supabase_vault_api.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../data/remote/firebase_vault_api.dart';
 
 // ──────────────────────────────────────────────────
 // Infrastructure providers
@@ -19,6 +18,7 @@ final vaultDaoProvider = Provider<VaultDao>((ref) {
   return VaultDao(db);
 });
 
-final supabaseVaultApiProvider = Provider<SupabaseVaultApi>((ref) {
-  return SupabaseVaultApi(Supabase.instance.client);
+final firebaseVaultApiProvider = Provider<FirebaseVaultApi>((ref) {
+  return FirebaseVaultApi();
 });
+

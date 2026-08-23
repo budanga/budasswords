@@ -1,17 +1,30 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/constants/app_constants.dart';
 
 class PinnedNotifier extends StateNotifier<Map<String, int>> {
-  final FlutterSecureStorage _storage;
-
-  PinnedNotifier(this._storage) : super({}) {
+  PinnedNotifier() : super({}) {
     _load();
   }
 
   Future<void> _load() async {
-    final str = await _storage.read(key: AppConstants.kPinnedKey);
+    final prefs = await SharedPreferences.getInstance();
+    var str = prefs.getString(AppConstants.kPinnedKey);
+
+    // Auto-migrate legacy entries from FlutterSecureStorage
+    if (str == null) {
+      try {
+        const secureStorage = FlutterSecureStorage();
+        str = await secureStorage.read(key: AppConstants.kPinnedKey);
+        if (str != null) {
+          await prefs.setString(AppConstants.kPinnedKey, str);
+          await secureStorage.delete(key: AppConstants.kPinnedKey);
+        }
+      } catch (_) {}
+    }
+
     if (str != null) {
       try {
         final Map<String, dynamic> map = jsonDecode(str);
@@ -29,7 +42,8 @@ class PinnedNotifier extends StateNotifier<Map<String, int>> {
       newState[id] = DateTime.now().millisecondsSinceEpoch;
     }
     state = newState;
-    await _storage.write(key: AppConstants.kPinnedKey, value: jsonEncode(newState));
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(AppConstants.kPinnedKey, jsonEncode(newState));
   }
 
   Future<void> toggleMultiple(List<String> ids) async {
@@ -43,10 +57,11 @@ class PinnedNotifier extends StateNotifier<Map<String, int>> {
       }
     }
     state = newState;
-    await _storage.write(key: AppConstants.kPinnedKey, value: jsonEncode(newState));
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(AppConstants.kPinnedKey, jsonEncode(newState));
   }
 }
 
 final pinnedProvider = StateNotifierProvider<PinnedNotifier, Map<String, int>>((ref) {
-  return PinnedNotifier(const FlutterSecureStorage());
+  return PinnedNotifier();
 });
