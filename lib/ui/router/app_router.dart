@@ -9,10 +9,13 @@ import 'package:budasswords/ui/screens/entry/entry_detail_screen.dart';
 import 'package:budasswords/ui/screens/entry/entry_form_screen.dart';
 import 'package:budasswords/ui/screens/settings/settings_screen.dart';
 import 'package:budasswords/ui/screens/settings/import_screen.dart';
+import 'package:budasswords/ui/screens/settings/export_screen.dart';
+import 'package:budasswords/ui/screens/admin/admin_screen.dart';
 import 'package:budasswords/domain/models/vault_entry.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final status = ref.watch(authProvider.select((s) => s.status));
+  final authState = ref.watch(authProvider);
+  final status = authState.status;
 
   return GoRouter(
     initialLocation: '/splash',
@@ -28,6 +31,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return path == '/login' ? null : '/login';
         case AuthStatus.unlocked:
           if (path == '/splash' || path == '/login' || path == '/setup') {
+            return '/vault';
+          }
+          if (path == '/admin' && !(authState.session?.isAdmin ?? false)) {
             return '/vault';
           }
           return null;
@@ -54,6 +60,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
       GoRoute(path: '/import', builder: (_, __) => const ImportScreen()),
+      GoRoute(path: '/export', builder: (_, __) => const ExportScreen()),
+      GoRoute(path: '/admin', builder: (_, __) => const AdminScreen()),
     ],
   );
 });

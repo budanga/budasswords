@@ -1,0 +1,37 @@
+# Registro de Cambios de IA (changelog_ai.md)
+
+## 2026-08-23
+- **Archivos modificados**:
+  - `lib/core/utils/clipboard_helper.dart` (creado)
+  - `lib/core/localization/app_strings.dart`
+  - `lib/app.dart`
+  - `lib/providers/auth_provider.dart`
+  - `lib/providers/vault_provider.dart`
+  - `lib/ui/screens/vault/vault_screen.dart`
+  - `lib/ui/screens/entry/entry_detail_screen.dart`
+  - `lib/ui/widgets/entry/secret_field.dart`
+  - `lib/ui/widgets/vault/password_generator_sheet.dart`
+  - `lib/ui/screens/settings/settings_screen.dart`
+  - `lib/ui/screens/settings/export_screen.dart` (creado)
+  - `lib/ui/router/app_router.dart`
+  - `lib/ui/screens/admin/admin_screen.dart` (creado)
+  - `lib/providers/admin_provider.dart` (creado)
+  - `lib/data/remote/firebase_vault_api.dart`
+  - `lib/domain/models/user_session.dart`
+  - `lib/core/constants/app_constants.dart`
+  - `pubspec.yaml`
+- **Resumen**:
+  - Implementado `ClipboardHelper` para auto-limpieza segura de contraseñas tras 30 segundos.
+  - Añadido `AppLifecycleListener` para bloqueo automático al minimizar o suspender la aplicación.
+  - Optimizada la sincronización inicial de `vaultNotifierProvider` para no re-subir registros limpios.
+  - Corregida la eliminación de credenciales en `signOut()` para no borrar preferencias del usuario.
+  - Añadida localización a tooltips del panel lateral.
+  - Añadido e integrado `_GitHubButton` con paleta ámbar (`AppColors.warning`) y contraste activo en hover, con soporte de ejecución robusto ante excepciones de plataforma en Windows.
+  - Migrado el almacenamiento de favoritos (`PinnedNotifier`) de `FlutterSecureStorage` a `SharedPreferences`.
+  - Creada la pantalla de exportación de bóveda (`ExportScreen`) con guardado de respaldo JSON y registro de ruta `/export`.
+  - Añadidos textos explicativos en el formulario de registro (`SetupScreen`) para aclarar el propósito de la contraseña de la cuenta (sincronización con Budasswords, no del correo) y la contraseña maestra (clave local de cifrado con "ESTE" en mayúsculas).
+  - Centrados los botones de acción principal en `SetupScreen` y `LoginScreen`.
+  - Mejorado el desglose y la precisión de los mensajes de error en `AuthNotifier.signIn` y `setup` para capturar `internal-error` e `INVALID_LOGIN_CREDENTIALS` de Firebase Auth y mostrar siempre el mensaje localizado de credenciales incorrectas.
+  - Normalizado el uso de mayúsculas en español para seguir estilo oración (*sentence case*) en lugar de mayúsculas iniciales por palabra (*Title Case*).
+  - Creado el Panel de Administración completo (`AdminScreen`, `AdminProvider`, `AdminUserItem`, `AdminStats`), con punto de acceso condicional en Ajustes para `lautaro_budin@hotmail.com`, protección de ruta en GoRouter, métricas globales de Firestore, directorio y búsqueda de usuarios en tiempo real, inspección técnica de metadatos de sincronización y herramienta de prueba de latencia.
+- **Razón**: Implementación de herramientas de administración del sistema solicitadas por el usuario.
