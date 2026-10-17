@@ -6,10 +6,14 @@ import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:budasswords/core/constants/app_colors.dart';
 import 'package:budasswords/core/localization/app_strings.dart';
+import 'package:budasswords/core/utils/app_toast.dart';
 import 'package:budasswords/providers/auth_provider.dart';
 import 'package:budasswords/providers/locale_provider.dart';
+import 'package:budasswords/providers/vault_provider.dart';
+import 'package:budasswords/ui/widgets/vault/connect_cloud_dialog.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -79,6 +83,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 20, 16, 36),
                     children: [
+              // Cloud Sync Status & Linking
+              _buildCloudSyncCard(context, ref, strings),
+              const Gap(8),
+
               // Language Selector
               _SettingCard(
                 icon: Icons.language_outlined,
@@ -215,6 +223,86 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 ),
 );
 }
+
+  Widget _buildCloudSyncCard(
+    BuildContext context,
+    WidgetRef ref,
+    AppStrings strings,
+  ) {
+    final firebaseUser = ref.watch(firebaseUserProvider).asData?.value ??
+        FirebaseAuth.instance.currentUser;
+    final isConnected = firebaseUser != null;
+
+    if (!isConnected) {
+      return _SettingCard(
+        icon: Icons.cloud_off_outlined,
+        title: strings.cloudSyncTitle,
+        subtitle: strings.cloudDisconnected,
+        titleColor: AppColors.warning,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => showConnectCloudDialog(context),
+              icon: const Icon(Icons.link, size: 18, color: AppColors.accent),
+              label: Text(
+                strings.connectCloudAction,
+                style: const TextStyle(
+                  color: AppColors.accent,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.accent, width: 1.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+        ),
+      ).animate().fadeIn();
+    }
+
+    return _SettingCard(
+      icon: Icons.cloud_done_outlined,
+      title: strings.cloudSyncTitle,
+      subtitle: strings.cloudConnectedAs(firebaseUser.email ?? ''),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () async {
+              await ref.read(vaultNotifierProvider.notifier).syncNow();
+              if (context.mounted) {
+                AppToast.success(context, strings.cloudActive);
+              }
+            },
+            icon: const Icon(Icons.sync, size: 18, color: AppColors.accent),
+            label: Text(
+              strings.syncNow,
+              style: const TextStyle(
+                color: AppColors.accent,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: AppColors.border, width: 1),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+            ),
+          ),
+        ),
+      ),
+    ).animate().fadeIn();
+  }
 
   Widget _languageButton({
     required String label,

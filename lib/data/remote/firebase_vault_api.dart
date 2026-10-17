@@ -73,12 +73,25 @@ class FirebaseVaultApi {
   // ────────── Realtime Listener ──────────
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>> watchChanges(
-    String userId,
-    void Function(List<Map<String, dynamic>>) onData,
-  ) {
+    String userId, {
+    required void Function(List<Map<String, dynamic>> upserted, List<String> deletedIds) onChanges,
+  }) {
     return _entriesRef(userId).snapshots().listen((snap) {
-      final entries = snap.docs.map((d) => d.data()).toList();
-      onData(entries);
+      final upserted = <Map<String, dynamic>>[];
+      final deletedIds = <String>[];
+
+      for (final change in snap.docChanges) {
+        if (change.type == DocumentChangeType.removed) {
+          deletedIds.add(change.doc.id);
+        } else {
+          final data = change.doc.data();
+          if (data != null) {
+            upserted.add(data);
+          }
+        }
+      }
+
+      onChanges(upserted, deletedIds);
     });
   }
 

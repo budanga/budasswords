@@ -121,6 +121,43 @@ class VaultDao {
         .get();
   }
 
+  /// Migrates entries belonging to offline or another user ID to the new user ID and marks them dirty.
+  Future<void> migrateUserId(String newUserId) async {
+    await (_db.update(_db.vaultEntries)
+          ..where((t) => t.userId.equals(newUserId).not() | t.userId.equals('offline')))
+        .write(VaultEntriesCompanion(
+      userId: Value(newUserId),
+      isDirty: const Value(1),
+    ));
+  }
+
+  /// Returns all active local entries for the specified user (including offline entries).
+  Future<List<VaultEntryData>> getActiveEntries(String userId) {
+    return (_db.select(_db.vaultEntries)
+          ..where((t) => (t.userId.equals(userId) | t.userId.equals('offline')) & t.deletedAt.isNull()))
+        .get();
+  }
+
+  /// Records a deletion operation in the sync queue for offline sync.
+  Future<void> queueDelete(String id) async {
+    await _db.into(_db.syncQueue).insert(
+          SyncQueueCompanion.insert(
+            entryId: id,
+            operation: 'delete',
+            payload: Uint8List(0),
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+          ),
+        );
+  }
+
+  Future<List<SyncQueueData>> getPendingDeletes() {
+    return (_db.select(_db.syncQueue)..where((t) => t.operation.equals('delete'))).get();
+  }
+
+  Future<void> clearPendingDelete(int id) async {
+    await (_db.delete(_db.syncQueue)..where((t) => t.id.equals(id))).go();
+  }
+
   /// Returns all active local entries regardless of dirty flag (for full cloud migration/sync).
   Future<List<VaultEntryData>> getAllActiveEntries() {
     return (_db.select(_db.vaultEntries)

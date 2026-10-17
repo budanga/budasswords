@@ -104,13 +104,25 @@ abstract class AppStrings {
   String get deleteEntryConfirmTitle;
   String get deleteEntryConfirmContent;
 
-  // Sync Badges
+  // Sync Badges & Cloud Account
   String get cloudActive;
   String get syncing;
   String get localMode;
   String get tooltipCloudActive;
   String get tooltipSyncing;
   String get tooltipLocalMode;
+  String get cloudSyncTitle;
+  String get connectCloudTitle;
+  String get connectCloudDescription;
+  String get connectCloudAction;
+  String get syncNow;
+  String get cloudDisconnected;
+  String get cloudAccountLinked;
+  String get cloudAccountLinkFailed;
+  String get cloudVaultKeyMismatch;
+  String get cloudSyncTapToConnect;
+  String get cloudSyncTapToSync;
+  String cloudConnectedAs(String email);
 
   // Password Generator Sheet
   String get generateSecurePassword;
@@ -319,7 +331,19 @@ class _SpanishStrings implements AppStrings {
   @override String get localMode => 'Modo local';
   @override String get tooltipCloudActive => 'Sincronizado con la nube de forma segura';
   @override String get tooltipSyncing => 'Sincronizando cambios pendientes...';
-  @override String get tooltipLocalMode => 'Modo local (sin conexión)';
+  @override String get tooltipLocalMode => 'Modo local (desconectado). Toca para vincular tu cuenta';
+  @override String get cloudSyncTitle => 'Sincronización en la nube';
+  @override String get connectCloudTitle => 'Vincular cuenta en la nube';
+  @override String get connectCloudDescription => 'Inicia sesión con tu cuenta para activar la sincronización multi-dispositivo sin perder ninguna entrada local.';
+  @override String get connectCloudAction => 'Vincular cuenta';
+  @override String get syncNow => 'Sincronizar ahora';
+  @override String get cloudDisconnected => 'Modo local (desconectado)';
+  @override String get cloudAccountLinked => 'Cuenta vinculada y datos sincronizados';
+  @override String get cloudAccountLinkFailed => 'No se pudo vincular la cuenta. Revisa tus credenciales.';
+  @override String get cloudVaultKeyMismatch => 'Esa cuenta tiene una bóveda con otra contraseña maestra. No se vinculó para no mezclar datos.';
+  @override String get cloudSyncTapToConnect => 'Toca para vincular tu cuenta y sincronizar';
+  @override String get cloudSyncTapToSync => 'Toca para sincronizar ahora';
+  @override String cloudConnectedAs(String email) => 'Conectado como $email';
 
   @override String get generateSecurePassword => 'Generar contraseña segura';
   @override String get generatePassword => 'Generar contraseña';
@@ -530,7 +554,19 @@ class _EnglishStrings implements AppStrings {
   @override String get localMode => 'Local mode';
   @override String get tooltipCloudActive => 'Securely synced with the cloud';
   @override String get tooltipSyncing => 'Syncing pending changes...';
-  @override String get tooltipLocalMode => 'Local mode (offline)';
+  @override String get tooltipLocalMode => 'Local mode (offline). Tap to link your account';
+  @override String get cloudSyncTitle => 'Cloud sync';
+  @override String get connectCloudTitle => 'Link cloud account';
+  @override String get connectCloudDescription => 'Sign in with your account to enable multi-device sync without losing any local entries.';
+  @override String get connectCloudAction => 'Link account';
+  @override String get syncNow => 'Sync now';
+  @override String get cloudDisconnected => 'Local mode (disconnected)';
+  @override String get cloudAccountLinked => 'Account linked and data synced';
+  @override String get cloudAccountLinkFailed => 'Could not link account. Check your credentials.';
+  @override String get cloudVaultKeyMismatch => 'That account has a vault with a different master password. It was not linked to avoid mixing data.';
+  @override String get cloudSyncTapToConnect => 'Tap to link your account and sync';
+  @override String get cloudSyncTapToSync => 'Tap to sync now';
+  @override String cloudConnectedAs(String email) => 'Connected as $email';
 
   @override String get generateSecurePassword => 'Generate Secure Password';
   @override String get generatePassword => 'Generate password';

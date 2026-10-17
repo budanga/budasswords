@@ -110,6 +110,15 @@ void main() {
       expect(en.expandPanel, equals('Expand panel'));
       expect(es.collapsePanel, equals('Minimizar panel'));
       expect(en.collapsePanel, equals('Collapse panel'));
+
+      expect(es.cloudSyncTitle, equals('Sincronización en la nube'));
+      expect(en.cloudSyncTitle, equals('Cloud sync'));
+      expect(es.connectCloudTitle, equals('Vincular cuenta en la nube'));
+      expect(en.connectCloudTitle, equals('Link cloud account'));
+      expect(es.cloudDisconnected, equals('Modo local (desconectado)'));
+      expect(en.cloudDisconnected, equals('Local mode (disconnected)'));
+      expect(es.cloudConnectedAs('user@test.com'), equals('Conectado como user@test.com'));
+      expect(en.cloudConnectedAs('user@test.com'), equals('Connected as user@test.com'));
     });
 
     test('AuthState getLocalizedError translates error codes correctly', () {

@@ -19,6 +19,8 @@ import 'package:budasswords/providers/crypto_provider.dart';
 
 enum AuthStatus { loading, setup, locked, unlocked }
 
+enum ConnectCloudResult { success, failed, vaultMismatch }
+
 enum AuthErrorCode {
   none,
   incorrectPassword,
@@ -449,7 +451,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
       var userId = firebaseUser?.uid ?? await _secureStorage.read(key: AppConstants.kUserIdKey);
       final email = firebaseUser?.email ?? (await _secureStorage.read(key: AppConstants.kEmailKey) ?? '');
 
-      if (userId == null || userId == 'offline') {
+      if (firebaseUser != null) {
+        userId = firebaseUser.uid;
+        await _secureStorage.write(key: AppConstants.kUserIdKey, value: firebaseUser.uid);
+        if (firebaseUser.email != null) {
+          await _secureStorage.write(key: AppConstants.kEmailKey, value: firebaseUser.email!);
+        }
+      } else if (userId == null || userId == 'offline') {
         userId = const Uuid().v4();
         await _secureStorage.write(key: AppConstants.kUserIdKey, value: userId);
       }
@@ -490,6 +498,75 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  // ── Connect Cloud Account (without wiping vault) ───
+
+  Future<ConnectCloudResult> connectCloud({
+    required String email,
+    required String password,
+  }) async {
+    final cipher = _cipher;
+    if (cipher == null) return ConnectCloudResult.failed;
+    try {
+      final userCred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final user = userCred.user;
+      if (user == null) return ConnectCloudResult.failed;
+
+      // The cloud vault must be encrypted with the same master key as the
+      // local one; otherwise each side would upload entries the other can't read.
+      final meta = await _remoteApi.fetchVaultMetadata(user.uid);
+      final remoteProofHex = meta?['vault_proof'] as String?;
+      if (remoteProofHex != null) {
+        final matches =
+            await cipher.verifyProof(CryptoUtils.fromHex(remoteProofHex));
+        if (!matches) {
+          await FirebaseAuth.instance.signOut();
+          return ConnectCloudResult.vaultMismatch;
+        }
+      } else {
+        final saltHex = await _secureStorage.read(key: AppConstants.kSaltKey);
+        final proofHex =
+            await _secureStorage.read(key: AppConstants.kProofBlobKey);
+        if (saltHex != null && proofHex != null) {
+          await _remoteApi.saveVaultMetadata(
+            user.uid,
+            saltHex: saltHex,
+            proofHex: proofHex,
+          );
+        }
+      }
+
+      await _secureStorage.write(key: AppConstants.kUserIdKey, value: user.uid);
+      await _secureStorage.write(key: AppConstants.kEmailKey, value: email);
+
+      try {
+        await _remoteApi.saveUserProfile(user.uid, email: email);
+      } catch (_) {}
+
+      final profile = await _remoteApi.fetchUserProfile(user.uid);
+      final role = profile?['role'] as String? ?? 'user';
+      await _secureStorage.write(key: AppConstants.kRoleKey, value: role);
+
+      // Migrate existing local entries to the logged-in cloud account ID
+      await _vaultDao.migrateUserId(user.uid);
+
+      if (state.session != null) {
+        state = state.copyWith(
+          session: state.session!.copyWith(
+            userId: user.uid,
+            email: email,
+            role: role,
+          ),
+        );
+      }
+      return ConnectCloudResult.success;
+    } catch (_) {
+      return ConnectCloudResult.failed;
+    }
+  }
+
   // ── Lock ──────────────────────────────────────────
 
   void lock() {
@@ -520,8 +597,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
 }
 
 // ──────────────────────────────────────────────────
-// Provider
+// Providers
 // ──────────────────────────────────────────────────
+
+final firebaseUserProvider = StreamProvider<User?>((ref) {
+  return FirebaseAuth.instance.authStateChanges();
+});
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   const storage = FlutterSecureStorage();

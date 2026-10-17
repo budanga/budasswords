@@ -92,34 +92,41 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
   VaultNotifier(this._dao, this._api, this._userId)
       : super(const AsyncData(null)) {
     if (_canSyncRemote) {
-      _subscription = _api.watchChanges(_userId, (remoteData) async {
-        try {
-          for (final row in remoteData) {
-            final id = row['id'] as String;
-            if (row['deleted_at'] != null) {
+      _subscription = _api.watchChanges(
+        _userId,
+        onChanges: (upserted, deletedIds) async {
+          try {
+            for (final id in deletedIds) {
               await _dao.deleteFromRemote(id);
-              await _api.delete(_userId, id);
-              continue;
             }
-            final companion = VaultEntriesCompanion(
-              id: Value(id),
-              userId: Value(row['user_id'] as String),
-              titleEnc: Value(_parseBlob(row['title_enc'])),
-              urlEnc: Value(
-                  row['url_enc'] != null ? _parseBlob(row['url_enc']) : null),
-              contentEnc: Value(_parseBlob(row['content_enc'])),
-              iv: Value(_parseBlob(row['iv'])),
-              createdAt: Value(
-                  DateTime.parse(row['created_at']).millisecondsSinceEpoch),
-              updatedAt: Value(
-                  DateTime.parse(row['updated_at']).millisecondsSinceEpoch),
-              deletedAt: const Value(null),
-              serverRev: Value(row['server_rev'] as int? ?? 1),
-            );
-            await _dao.upsertRaw(companion);
-          }
-        } catch (_) {}
-      });
+            for (final row in upserted) {
+              final id = row['id'] as String;
+              if (row['deleted_at'] != null) {
+                await _dao.deleteFromRemote(id);
+                await _api.delete(_userId, id);
+                continue;
+              }
+              final companion = VaultEntriesCompanion(
+                id: Value(id),
+                userId: Value(row['user_id'] as String),
+                titleEnc: Value(_parseBlob(row['title_enc'])),
+                urlEnc: Value(
+                    row['url_enc'] != null ? _parseBlob(row['url_enc']) : null),
+                contentEnc: Value(_parseBlob(row['content_enc'])),
+                iv: Value(_parseBlob(row['iv'])),
+                createdAt: Value(
+                    DateTime.parse(row['created_at']).millisecondsSinceEpoch),
+                updatedAt: Value(
+                    DateTime.parse(row['updated_at']).millisecondsSinceEpoch),
+                deletedAt: const Value(null),
+                serverRev: Value(row['server_rev'] as int? ?? 1),
+                isDirty: const Value(0),
+              );
+              await _dao.upsertRaw(companion);
+            }
+          } catch (_) {}
+        },
+      );
     }
   }
 
@@ -172,8 +179,26 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
     try {
       await _dao.hardDelete(id);
       if (_canSyncRemote) {
-        await _api.delete(_userId, id);
+        try {
+          await _api.delete(_userId, id);
+        } catch (_) {
+          await _dao.queueDelete(id);
+        }
+      } else {
+        await _dao.queueDelete(id);
       }
+      state = const AsyncData(null);
+    } catch (e, st) {
+      state = AsyncError(e, st);
+    }
+  }
+
+  Future<void> syncNow() async {
+    if (!_canSyncRemote) return;
+    state = const AsyncLoading();
+    try {
+      await pushDirtyToRemote();
+      await pullFromRemote();
       state = const AsyncData(null);
     } catch (e, st) {
       state = AsyncError(e, st);
@@ -190,6 +215,18 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
   Future<void> pushDirtyToRemote() async {
     if (!_canSyncRemote) return;
     try {
+      // 1. Process pending offline deletions first
+      final pendingDeletes = await _dao.getPendingDeletes();
+      for (final op in pendingDeletes) {
+        try {
+          await _api.delete(_userId, op.entryId);
+          await _dao.clearPendingDelete(op.id);
+        } catch (_) {
+          // Keep trying other deletes
+        }
+      }
+
+      // 2. Process dirty upserts
       final dirty = await _dao.getDirtyEntries(_userId);
       for (final row in dirty) {
         try {
@@ -265,6 +302,8 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
     state = const AsyncLoading();
     try {
       final remoteData = await _api.fetchAll(_userId);
+      final remoteIds = <String>{};
+
       for (final row in remoteData) {
         final id = row['id'] as String;
         if (row['deleted_at'] != null) {
@@ -272,6 +311,7 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
           await _api.delete(_userId, id);
           continue;
         }
+        remoteIds.add(id);
         final companion = VaultEntriesCompanion(
           id: Value(id),
           userId: Value(row['user_id'] as String),
@@ -286,9 +326,19 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
               Value(DateTime.parse(row['updated_at']).millisecondsSinceEpoch),
           deletedAt: const Value(null),
           serverRev: Value(row['server_rev'] as int? ?? 1),
+          isDirty: const Value(0),
         );
         await _dao.upsertRaw(companion);
       }
+
+      // Reconcile deletions: remove local clean entries not present in remoteData
+      final localEntries = await _dao.getActiveEntries(_userId);
+      for (final local in localEntries) {
+        if (local.isDirty == 0 && !remoteIds.contains(local.id)) {
+          await _dao.hardDelete(local.id);
+        }
+      }
+
       state = const AsyncData(null);
     } catch (e, st) {
       state = AsyncError(e, st);
@@ -314,10 +364,12 @@ final vaultNotifierProvider =
   final auth = ref.watch(authProvider);
   final userId = auth.session?.userId ?? '';
 
+  final firebaseUserAsync = ref.watch(firebaseUserProvider);
+  final firebaseUser = firebaseUserAsync.asData?.value ?? FirebaseAuth.instance.currentUser;
+
   final notifier = VaultNotifier(dao, api, userId);
 
   // Trigger initial sync if unlocked and authenticated with Firebase
-  final firebaseUser = FirebaseAuth.instance.currentUser;
   if (auth.status == AuthStatus.unlocked &&
       userId.isNotEmpty &&
       firebaseUser != null &&
