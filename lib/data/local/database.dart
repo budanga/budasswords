@@ -13,6 +13,9 @@ part 'database.g.dart';
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  /// Opens the database on a custom executor (e.g. in-memory for tests).
+  AppDatabase.withExecutor(super.executor);
+
   @override
   int get schemaVersion => 1;
 }

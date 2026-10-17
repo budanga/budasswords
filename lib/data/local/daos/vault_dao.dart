@@ -79,7 +79,16 @@ class VaultDao {
 
   /// Inserts raw encrypted data from remote (Supabase).
   /// isDirty is set to 0 because it's already on the server.
+  /// A pending local edit is kept unless the remote copy is strictly newer.
   Future<void> upsertRaw(VaultEntriesCompanion companion) async {
+    final local = await (_db.select(_db.vaultEntries)
+          ..where((t) => t.id.equals(companion.id.value)))
+        .getSingleOrNull();
+    if (local != null &&
+        local.isDirty == 1 &&
+        local.updatedAt >= companion.updatedAt.value) {
+      return;
+    }
     await _db.into(_db.vaultEntries).insertOnConflictUpdate(
           companion.copyWith(isDirty: const Value(0)),
         );
