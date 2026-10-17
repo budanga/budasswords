@@ -41,6 +41,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         final available = await _localAuth.getAvailableBiometrics();
         if (available.isNotEmpty && mounted) {
           setState(() => _biometricAvailable = true);
+          // Prompt right away; the button stays as a retry if it's dismissed.
+          WidgetsBinding.instance.addPostFrameCallback((_) => _tryBiometric());
         }
       }
     } catch (_) {}
