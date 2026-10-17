@@ -14,8 +14,10 @@ import 'package:budasswords/ui/screens/admin/admin_screen.dart';
 import 'package:budasswords/domain/models/vault_entry.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
-  final status = authState.status;
+  // Rebuild only when navigation-relevant fields change; error messages
+  // must not recreate the router (that would remount the login screen).
+  final (status, isAdmin) = ref.watch(authProvider
+      .select((s) => (s.status, s.session?.isAdmin ?? false)));
 
   return GoRouter(
     initialLocation: '/splash',
@@ -33,7 +35,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           if (path == '/splash' || path == '/login' || path == '/setup') {
             return '/vault';
           }
-          if (path == '/admin' && !(authState.session?.isAdmin ?? false)) {
+          if (path == '/admin' && !isAdmin) {
             return '/vault';
           }
           return null;
