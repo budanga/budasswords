@@ -10,8 +10,6 @@ class AdminUserItem {
   final DateTime? createdAt;
   final DateTime? lastActiveAt;
   final int entriesCount;
-  final bool hasVaultMeta;
-  final Map<String, dynamic>? vaultMeta;
 
   const AdminUserItem({
     required this.uid,
@@ -20,8 +18,6 @@ class AdminUserItem {
     this.createdAt,
     this.lastActiveAt,
     this.entriesCount = 0,
-    this.hasVaultMeta = false,
-    this.vaultMeta,
   });
 
   bool get isAdmin => role.toLowerCase() == 'admin';
@@ -33,8 +29,6 @@ class AdminUserItem {
     DateTime? createdAt,
     DateTime? lastActiveAt,
     int? entriesCount,
-    bool? hasVaultMeta,
-    Map<String, dynamic>? vaultMeta,
   }) {
     return AdminUserItem(
       uid: uid ?? this.uid,
@@ -43,8 +37,6 @@ class AdminUserItem {
       createdAt: createdAt ?? this.createdAt,
       lastActiveAt: lastActiveAt ?? this.lastActiveAt,
       entriesCount: entriesCount ?? this.entriesCount,
-      hasVaultMeta: hasVaultMeta ?? this.hasVaultMeta,
-      vaultMeta: vaultMeta ?? this.vaultMeta,
     );
   }
 }
@@ -184,8 +176,6 @@ class AdminNotifier extends StateNotifier<AdminState> {
         // Fetch user stats (entry count & metadata)
         final stats = await _remoteApi.fetchUserVaultStats(uid);
         final count = stats['entries_count'] as int? ?? 0;
-        final hasMeta = stats['has_vault_meta'] as bool? ?? false;
-        final vaultMeta = stats['vault_meta'] as Map<String, dynamic>?;
 
         totalVaultEntries += count;
 
@@ -196,8 +186,6 @@ class AdminNotifier extends StateNotifier<AdminState> {
           createdAt: createdAt,
           lastActiveAt: lastActiveAt,
           entriesCount: count,
-          hasVaultMeta: hasMeta,
-          vaultMeta: vaultMeta,
         ));
       }
 
@@ -207,8 +195,6 @@ class AdminNotifier extends StateNotifier<AdminState> {
           !parsedUsers.any((u) => u.uid == _currentUserId)) {
         final stats = await _remoteApi.fetchUserVaultStats(_currentUserId);
         final count = stats['entries_count'] as int? ?? 0;
-        final hasMeta = stats['has_vault_meta'] as bool? ?? false;
-        final vaultMeta = stats['vault_meta'] as Map<String, dynamic>?;
 
         totalVaultEntries += count;
         active24h++;
@@ -221,8 +207,6 @@ class AdminNotifier extends StateNotifier<AdminState> {
           createdAt: DateTime.now(),
           lastActiveAt: DateTime.now(),
           entriesCount: count,
-          hasVaultMeta: hasMeta,
-          vaultMeta: vaultMeta,
         ));
       }
 

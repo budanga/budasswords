@@ -97,23 +97,23 @@ class FirebaseVaultApi {
   Future<void> saveUserProfile(
     String userId, {
     required String email,
-    String? role,
   }) async {
     final nowIso = DateTime.now().toIso8601String();
     final docRef = _firestore.collection('users').doc(userId);
     final doc = await docRef.get();
 
-    final existingRole = doc.data()?['role'] as String?;
-    final finalRole = role ?? existingRole ?? 'user';
-
     final data = <String, dynamic>{
       'uid': userId,
       'email': email,
       'last_active_at': nowIso,
-      'role': finalRole,
     };
 
-    if (!doc.exists || doc.data()?['created_at'] == null) {
+    // The role is only ever set to 'user' on creation; promotions happen
+    // server-side (console / Admin SDK) and the rules reject client changes.
+    if (!doc.exists) {
+      data['role'] = 'user';
+      data['created_at'] = nowIso;
+    } else if (doc.data()?['created_at'] == null) {
       data['created_at'] = nowIso;
     }
 
@@ -138,34 +138,13 @@ class FirebaseVaultApi {
     }
   }
 
+  /// Entry count only: admins must never read other users' vault salt/proof.
   Future<Map<String, dynamic>> fetchUserVaultStats(String userId) async {
     try {
       final entriesSnap = await _entriesRef(userId).count().get();
-      final meta = await fetchVaultMetadata(userId);
-
-      return {
-        'entries_count': entriesSnap.count ?? 0,
-        'has_vault_meta': meta != null,
-        'vault_meta': meta,
-      };
-    } catch (_) {
-      // Fallback if aggregate count query is not supported
-      try {
-        final entriesSnap = await _entriesRef(userId).get();
-        final meta = await fetchVaultMetadata(userId);
-        return {
-          'entries_count': entriesSnap.docs.length,
-          'has_vault_meta': meta != null,
-          'vault_meta': meta,
-        };
-      } catch (e) {
-        return {
-          'entries_count': 0,
-          'has_vault_meta': false,
-          'vault_meta': null,
-          'error': e.toString(),
-        };
-      }
+      return {'entries_count': entriesSnap.count ?? 0};
+    } catch (e) {
+      return {'entries_count': 0, 'error': e.toString()};
     }
   }
 

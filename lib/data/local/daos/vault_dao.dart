@@ -107,6 +107,14 @@ class VaultDao {
     await (_db.delete(_db.vaultEntries)..where((t) => t.id.equals(id))).go();
   }
 
+  /// Applies a deletion coming from the server; a pending local edit wins
+  /// and will be re-uploaded on the next push.
+  Future<void> deleteFromRemote(String id) async {
+    await (_db.delete(_db.vaultEntries)
+          ..where((t) => t.id.equals(id) & t.isDirty.equals(0)))
+        .go();
+  }
+
   Future<List<VaultEntryData>> getDirtyEntries(String userId) {
     return (_db.select(_db.vaultEntries)
           ..where((t) => (t.userId.equals(userId) | t.userId.equals('offline')) & t.isDirty.equals(1)))

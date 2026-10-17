@@ -83,4 +83,25 @@ void main() {
       expect(row.isDirty, 0);
     });
   });
+
+  group('VaultDao.deleteFromRemote', () {
+    test('keeps an entry with a pending offline edit', () async {
+      await dao.upsertRaw(await remoteRow('v1', t0));
+      await editLocally('offline edit', t0.add(const Duration(minutes: 5)));
+
+      await dao.deleteFromRemote('e1');
+
+      final row = await localRow();
+      expect(await cipher.decryptToString(row.contentEnc), 'offline edit');
+    });
+
+    test('removes a clean entry', () async {
+      await dao.upsertRaw(await remoteRow('v1', t0));
+
+      await dao.deleteFromRemote('e1');
+
+      final rows = await db.select(db.vaultEntries).get();
+      expect(rows, isEmpty);
+    });
+  });
 }

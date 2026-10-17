@@ -214,9 +214,6 @@ abstract class AppStrings {
   String get adminCreatedAt;
   String get adminLastActive;
   String get adminEntries;
-  String get adminVaultMeta;
-  String get adminVaultConfigured;
-  String get adminVaultNotConfigured;
   String get adminUserDetailsTitle;
   String get adminDiagnostics;
   String get adminRunDiagnostics;
@@ -428,9 +425,6 @@ class _SpanishStrings implements AppStrings {
   @override String get adminCreatedAt => 'Fecha de registro';
   @override String get adminLastActive => 'Última actividad';
   @override String get adminEntries => 'Entradas';
-  @override String get adminVaultMeta => 'Metadatos de bóveda';
-  @override String get adminVaultConfigured => 'Bóveda configurada';
-  @override String get adminVaultNotConfigured => 'Sin configurar';
   @override String get adminUserDetailsTitle => 'Inspección de usuario';
   @override String get adminDiagnostics => 'Diagnóstico de Firestore';
   @override String get adminRunDiagnostics => 'Probar latencia y conexión';
@@ -642,9 +636,6 @@ class _EnglishStrings implements AppStrings {
   @override String get adminCreatedAt => 'Registered';
   @override String get adminLastActive => 'Last Active';
   @override String get adminEntries => 'Entries';
-  @override String get adminVaultMeta => 'Vault Metadata';
-  @override String get adminVaultConfigured => 'Vault configured';
-  @override String get adminVaultNotConfigured => 'Not configured';
   @override String get adminUserDetailsTitle => 'User Inspection';
   @override String get adminDiagnostics => 'Firestore Diagnostics';
   @override String get adminRunDiagnostics => 'Test Latency & Connection';

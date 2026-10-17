@@ -97,7 +97,7 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
           for (final row in remoteData) {
             final id = row['id'] as String;
             if (row['deleted_at'] != null) {
-              await _dao.hardDelete(id);
+              await _dao.deleteFromRemote(id);
               await _api.delete(_userId, id);
               continue;
             }
@@ -268,7 +268,7 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
       for (final row in remoteData) {
         final id = row['id'] as String;
         if (row['deleted_at'] != null) {
-          await _dao.hardDelete(id);
+          await _dao.deleteFromRemote(id);
           await _api.delete(_userId, id);
           continue;
         }

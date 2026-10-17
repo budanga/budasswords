@@ -705,44 +705,6 @@ class _UserInspectorSheet extends StatelessWidget {
           _detailRow(strings.adminCreatedAt, createdStr),
           _detailRow(strings.adminLastActive, lastActiveStr),
           _detailRow(strings.adminTotalEntries, '${user.entriesCount} ${strings.adminEntries.toLowerCase()}'),
-          _detailRow(
-            strings.adminVaultMeta,
-            user.hasVaultMeta ? strings.adminVaultConfigured : strings.adminVaultNotConfigured,
-            valueColor: user.hasVaultMeta ? AppColors.success : AppColors.warning,
-          ),
-          if (user.vaultMeta != null) ...[
-            const Gap(12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.bg3,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Firestore Metadata:',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textDisabled,
-                    ),
-                  ),
-                  const Gap(6),
-                  Text(
-                    user.vaultMeta.toString(),
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );

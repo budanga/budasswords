@@ -1,0 +1,43 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin';
+    }
+
+    match /users/{uid} {
+      // Profile: owner, or admin for the user directory.
+      allow read: if isOwner(uid) || isAdmin();
+      // New profiles always start as 'user'.
+      allow create: if isOwner(uid)
+        && request.resource.data.get('role', 'user') == 'user';
+      // Owners may update their profile but never their role.
+      allow update: if isOwner(uid)
+        && request.resource.data.get('role', null) == resource.data.get('role', null);
+      allow delete: if false;
+
+      // Encrypted entries. Admins may list them only to count entries:
+      // without the owner's salt the ciphertext cannot be attacked offline.
+      match /vault_entries/{entryId} {
+        allow read, write: if isOwner(uid);
+        allow list: if isAdmin();
+      }
+
+      // Vault salt + proof and ping doc: strictly owner-only.
+      match /meta/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+  }
+}
