@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 
-/// Crisp native vector logo for Budasswords matching the exact shield-padlock artwork.
+/// Crisp native vector logo for Budasswords, identical to the launcher icon.
 class AppLogo extends StatelessWidget {
   final double size;
   final bool showContainer;
@@ -41,129 +41,81 @@ class AppLogo extends StatelessWidget {
   }
 }
 
+/// Paints the same artwork as the launcher icon (assets/logo.png).
+/// Coordinates are in the icon's 1024px design space, cropped to the glyph.
 class _ShieldPadlockPainter extends CustomPainter {
+  static const _origin = Offset(192, 203);
+  static const _extent = 640.0;
+  static const _shieldShade = Color(0xFF9E4A2E);
+
   @override
   void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    // ── 1. Shackle (Top Arch) ──
-    final shackleLeftPaint = Paint()
-      ..color = const Color(0xFFF5A623)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.088
-      ..strokeCap = StrokeCap.butt;
-
-    final shackleRightPaint = Paint()
-      ..color = const Color(0xFFD97706)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.088
-      ..strokeCap = StrokeCap.butt;
-
-    final shackleRect = Rect.fromCenter(
-      center: Offset(w * 0.50, h * 0.38),
-      width: w * 0.38,
-      height: h * 0.46,
-    );
-
-    // Draw left half of arch
-    canvas.drawArc(
-      shackleRect,
-      math.pi,
-      math.pi * 0.5,
-      false,
-      shackleLeftPaint,
-    );
-    // Draw right half of arch
-    canvas.drawArc(
-      shackleRect,
-      math.pi * 1.5,
-      math.pi * 0.5,
-      false,
-      shackleRightPaint,
-    );
-
-    // ── 2. Outer Shield Outline ──
-    final outerStrokePaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Color(0xFFFBBF24),
-          Color(0xFFEA580C),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, w, h))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.075
-      ..strokeJoin = StrokeJoin.miter
-      ..strokeCap = StrokeCap.square;
-
-    final outerPath = Path();
-    // Start at top peak
-    outerPath.moveTo(w * 0.50, h * 0.34);
-    // Top-left shoulder
-    outerPath.lineTo(w * 0.22, h * 0.40);
-    // Left vertical side
-    outerPath.lineTo(w * 0.22, h * 0.60);
-    // Left curve down to bottom tip
-    outerPath.quadraticBezierTo(w * 0.23, h * 0.77, w * 0.50, h * 0.90);
-    // Right curve up from bottom tip
-    outerPath.quadraticBezierTo(w * 0.77, h * 0.77, w * 0.77, h * 0.60);
-    // Right vertical side (with stylized notch / monogram cut)
-    outerPath.lineTo(w * 0.77, h * 0.54);
-    outerPath.lineTo(w * 0.65, h * 0.54);
-    outerPath.moveTo(w * 0.77, h * 0.48);
-    outerPath.lineTo(w * 0.77, h * 0.40);
-    // Top-right shoulder back to peak
-    outerPath.lineTo(w * 0.50, h * 0.34);
-
-    canvas.drawPath(outerPath, outerStrokePaint);
-
-    // ── 3. Inner Shield (Filled with 2-Tone Split) ──
-    final innerPath = Path();
-    innerPath.moveTo(w * 0.50, h * 0.42);
-    innerPath.lineTo(w * 0.30, h * 0.46);
-    innerPath.lineTo(w * 0.30, h * 0.60);
-    innerPath.quadraticBezierTo(w * 0.31, h * 0.74, w * 0.50, h * 0.84);
-    innerPath.quadraticBezierTo(w * 0.69, h * 0.74, w * 0.69, h * 0.60);
-    innerPath.lineTo(w * 0.69, h * 0.46);
-    innerPath.close();
-
-    // Left Half: Bright Gold
     canvas.save();
-    canvas.clipRect(Rect.fromLTWH(0, 0, w * 0.50, h));
-    final leftFillPaint = Paint()
-      ..color = const Color(0xFFF59E0B)
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(innerPath, leftFillPaint);
-    canvas.restore();
+    canvas.scale(size.width / _extent, size.height / _extent);
+    canvas.translate(-_origin.dx, -_origin.dy);
 
-    // Right Half: Rich Amber/Terracotta
-    canvas.save();
-    canvas.clipRect(Rect.fromLTWH(w * 0.50, 0, w * 0.50, h));
-    final rightFillPaint = Paint()
-      ..color = const Color(0xFFD97706)
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(innerPath, rightFillPaint);
-    canvas.restore();
+    // ── 1. Shackle ──
+    final shackle = Path()
+      ..moveTo(392, 455)
+      ..lineTo(392, 360)
+      ..arcTo(Rect.fromCircle(center: const Offset(512, 360), radius: 120),
+          math.pi, math.pi, false)
+      ..lineTo(632, 455);
+    canvas.drawPath(
+      shackle,
+      Paint()
+        ..color = AppColors.textPrimary
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 58,
+    );
 
-    // ── 4. Keyhole (Circle + Trapezoid Keyway in Dark Graphite) ──
-    final keyholePaint = Paint()
-      ..color = const Color(0xFF16181D)
-      ..style = PaintingStyle.fill;
-
-    // Top Circle
-    canvas.drawCircle(Offset(w * 0.50, h * 0.58), w * 0.075, keyholePaint);
-
-    // Lower Trapezoid
-    final keywayPath = Path()
-      ..moveTo(w * 0.46, h * 0.60)
-      ..lineTo(w * 0.54, h * 0.60)
-      ..lineTo(w * 0.56, h * 0.74)
-      ..lineTo(w * 0.44, h * 0.74)
+    // ── 2. Shield, two-tone terracotta ──
+    final leftHalf = Path()
+      ..moveTo(512, 400)
+      ..lineTo(296, 450)
+      ..lineTo(296, 600)
+      ..quadraticBezierTo(300, 736, 512, 836)
       ..close();
+    final rightHalf = Path()
+      ..moveTo(512, 400)
+      ..lineTo(728, 450)
+      ..lineTo(728, 600)
+      ..quadraticBezierTo(724, 736, 512, 836)
+      ..close();
+    canvas.drawPath(leftHalf, Paint()..color = AppColors.accent);
+    canvas.drawPath(rightHalf, Paint()..color = _shieldShade);
 
-    canvas.drawPath(keywayPath, keyholePaint);
+    // ── 3. Inner rule ──
+    final inner = Path()
+      ..moveTo(512, 452)
+      ..lineTo(344, 490)
+      ..lineTo(344, 598)
+      ..quadraticBezierTo(348, 702, 512, 782)
+      ..quadraticBezierTo(676, 702, 680, 598)
+      ..lineTo(680, 490)
+      ..close();
+    canvas.drawPath(
+      inner,
+      Paint()
+        ..color = AppColors.bg0.withValues(alpha: 0.9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 14,
+    );
+
+    // ── 4. Keyhole ──
+    final keyhole = Paint()..color = AppColors.bg0;
+    canvas.drawCircle(const Offset(512, 582), 40, keyhole);
+    canvas.drawPath(
+      Path()
+        ..moveTo(492, 600)
+        ..lineTo(472, 690)
+        ..lineTo(552, 690)
+        ..lineTo(532, 600)
+        ..close(),
+      keyhole,
+    );
+
+    canvas.restore();
   }
 
   @override
