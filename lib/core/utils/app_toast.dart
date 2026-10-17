@@ -115,8 +115,9 @@ class _ToastWidgetState extends State<_ToastWidget>
 
   @override
   Widget build(BuildContext context) {
+    // Follow the keyboard: sit above it while open, back to the base offset when closed.
     return Positioned(
-      bottom: 36,
+      bottom: 36 + MediaQuery.viewInsetsOf(context).bottom,
       left: 0,
       right: 0,
       child: Material(
