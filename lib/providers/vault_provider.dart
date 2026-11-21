@@ -84,13 +84,18 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
 
   StreamSubscription? _subscription;
 
+  /// Overridable in tests, where Firebase is not initialised.
+  final bool Function()? _canSyncOverride;
+
   bool get _canSyncRemote {
+    if (_canSyncOverride != null) return _canSyncOverride();
     final user = FirebaseAuth.instance.currentUser;
     return user != null && user.uid == _userId && _userId.isNotEmpty;
   }
 
-  VaultNotifier(this._dao, this._api, this._userId)
-      : super(const AsyncData(null)) {
+  VaultNotifier(this._dao, this._api, this._userId, {bool Function()? canSyncRemote})
+      : _canSyncOverride = canSyncRemote,
+        super(const AsyncData(null)) {
     if (_canSyncRemote) {
       _subscription = _api.watchChanges(
         _userId,
@@ -134,6 +139,13 @@ class VaultNotifier extends StateNotifier<AsyncValue<void>> {
   void dispose() {
     _subscription?.cancel();
     super.dispose();
+  }
+
+  /// Syncs are async: the provider can rebuild or the vault can lock while one
+  /// is still running. Drop late results instead of writing to a disposed notifier.
+  @override
+  set state(AsyncValue<void> value) {
+    if (mounted) super.state = value;
   }
 
   static const _uuid = Uuid();
@@ -361,8 +373,10 @@ final vaultNotifierProvider =
     StateNotifierProvider<VaultNotifier, AsyncValue<void>>((ref) {
   final dao = ref.watch(vaultDaoProvider);
   final api = ref.watch(firebaseVaultApiProvider);
-  final auth = ref.watch(authProvider);
-  final userId = auth.session?.userId ?? '';
+  // Only what the vault depends on: error or lockout changes must not
+  // recreate the notifier (and restart a sync) mid-flight.
+  final (status, userId) = ref.watch(
+      authProvider.select((s) => (s.status, s.session?.userId ?? '')));
 
   final firebaseUserAsync = ref.watch(firebaseUserProvider);
   final firebaseUser = firebaseUserAsync.asData?.value ?? FirebaseAuth.instance.currentUser;
@@ -370,12 +384,13 @@ final vaultNotifierProvider =
   final notifier = VaultNotifier(dao, api, userId);
 
   // Trigger initial sync if unlocked and authenticated with Firebase
-  if (auth.status == AuthStatus.unlocked &&
+  if (status == AuthStatus.unlocked &&
       userId.isNotEmpty &&
       firebaseUser != null &&
       firebaseUser.uid == userId) {
     Future.microtask(() async {
       await notifier.pushDirtyToRemote();
+      if (!notifier.mounted) return;
       await notifier.pullFromRemote();
     });
   }
