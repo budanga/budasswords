@@ -10,7 +10,8 @@ import 'package:budasswords/core/localization/app_strings.dart';
 import 'package:budasswords/core/utils/app_toast.dart';
 import 'package:budasswords/providers/auth_provider.dart';
 import 'package:budasswords/providers/locale_provider.dart';
-import 'package:budasswords/ui/widgets/common/app_logo.dart';
+import 'package:budasswords/ui/widgets/motion/ascii_shield.dart';
+import 'package:budasswords/ui/widgets/motion/dither_paper.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -88,123 +89,126 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.bg0,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // Top-right language toggle button
-            Positioned(
-              top: 14,
-              right: 18,
-              child: const _LanguageToggleButton().animate().fadeIn(duration: 250.ms),
-            ),
-            Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Logo
-                      const AppLogo(
-                        size: 50,
-                        showContainer: true,
-                      ).animate().scale(duration: 400.ms, curve: Curves.easeOutBack),
-                      const Gap(20),
-                      Text(
-                        strings.appTitle,
-                        style: GoogleFonts.newsreader(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                          letterSpacing: -0.5,
-                        ),
-                      ).animate().fadeIn(delay: 150.ms),
-                      const Gap(6),
-                      Text(
-                        strings.loginSubtitle,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textSecondary,
-                        ),
-                      ).animate().fadeIn(delay: 250.ms),
-                      const Gap(36),
-                      if (Platform.isAndroid && _biometricAvailable && !_biometricPassed) ...[
-                        OutlinedButton.icon(
-                          onPressed: _tryBiometric,
-                          icon: const Icon(Icons.fingerprint, color: AppColors.accent, size: 24),
-                          label: Text(
-                            strings.unlockWithBiometrics,
-                            style: const TextStyle(
-                              color: AppColors.accent,
-                              fontSize: 15,
+      body: Stack(
+        children: [
+          // Living paper behind the form, edge to edge.
+          const Positioned.fill(child: DitherPaper()),
+          SafeArea(
+            child: Stack(
+              children: [
+                // Top-right language toggle button
+                Positioned(
+                  top: 14,
+                  right: 18,
+                  child: const _LanguageToggleButton().animate().fadeIn(duration: 250.ms),
+                ),
+                Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // Logo
+                          const AsciiShield(fontSize: 13),
+                          const Gap(20),
+                          Text(
+                            strings.appTitle,
+                            style: GoogleFonts.newsreader(
+                              fontSize: 32,
                               fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                              letterSpacing: -0.5,
                             ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(double.infinity, 50),
-                            side: const BorderSide(color: AppColors.accent, width: 1.5),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.05),
-                        const Gap(20),
-                      ],
-                      // Password field
-                      TextFormField(
-                        controller: _masterPwCtrl,
-                        enabled: !_biometricAvailable || _biometricPassed,
-                        obscureText: _obscure,
-                        onFieldSubmitted: (_) => _unlock(),
-                        decoration: InputDecoration(
-                          labelText: (_biometricAvailable && !_biometricPassed)
-                              ? strings.validateBiometricsFirst
-                              : strings.masterPasswordPrompt,
-                          prefixIcon: const Icon(
-                            Icons.lock_outline,
-                            color: AppColors.textSecondary,
-                            size: 20,
-                          ),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscure
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
+                          ).animate().fadeIn(delay: 150.ms),
+                          const Gap(6),
+                          Text(
+                            strings.loginSubtitle,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 14,
                               color: AppColors.textSecondary,
-                              size: 20,
                             ),
-                            onPressed: () => setState(() => _obscure = !_obscure),
-                          ),
-                        ),
-                      ).animate().fadeIn(delay: 350.ms).slideY(begin: 0.05),
-                      const Gap(20),
-                      Center(
-                        child: ElevatedButton(
-                          onPressed:
-                              _loading || (_biometricAvailable && !_biometricPassed)
-                                  ? null
-                                  : _unlock,
-                          child: _loading
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(strings.openVault),
-                        ),
-                      ).animate().fadeIn(delay: 450.ms),
-                    ],
+                          ).animate().fadeIn(delay: 250.ms),
+                          const Gap(36),
+                          if (Platform.isAndroid && _biometricAvailable && !_biometricPassed) ...[
+                            OutlinedButton.icon(
+                              onPressed: _tryBiometric,
+                              icon: const Icon(Icons.fingerprint, color: AppColors.accent, size: 24),
+                              label: Text(
+                                strings.unlockWithBiometrics,
+                                style: const TextStyle(
+                                  color: AppColors.accent,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(double.infinity, 50),
+                                side: const BorderSide(color: AppColors.accent, width: 1.5),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.05),
+                            const Gap(20),
+                          ],
+                          // Password field
+                          TextFormField(
+                            controller: _masterPwCtrl,
+                            enabled: !_biometricAvailable || _biometricPassed,
+                            obscureText: _obscure,
+                            onFieldSubmitted: (_) => _unlock(),
+                            decoration: InputDecoration(
+                              labelText: (_biometricAvailable && !_biometricPassed)
+                                  ? strings.validateBiometricsFirst
+                                  : strings.masterPasswordPrompt,
+                              prefixIcon: const Icon(
+                                Icons.lock_outline,
+                                color: AppColors.textSecondary,
+                                size: 20,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscure
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                  color: AppColors.textSecondary,
+                                  size: 20,
+                                ),
+                                onPressed: () => setState(() => _obscure = !_obscure),
+                              ),
+                            ),
+                          ).animate().fadeIn(delay: 350.ms).slideY(begin: 0.05),
+                          const Gap(20),
+                          Center(
+                            child: ElevatedButton(
+                              onPressed:
+                                  _loading || (_biometricAvailable && !_biometricPassed)
+                                      ? null
+                                      : _unlock,
+                              child: _loading
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : Text(strings.openVault),
+                            ),
+                          ).animate().fadeIn(delay: 450.ms),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

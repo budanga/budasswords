@@ -21,10 +21,16 @@ class ClipboardHelper {
     _lastCopiedText = text;
 
     if (context.mounted) {
-      final msg = successMessage ??
-          (strings?.copiedClearsIn(AppConstants.clipboardClearSeconds) ??
-              'Copiado (se borra en ${AppConstants.clipboardClearSeconds}s)');
-      AppToast.success(context, msg);
+      if (successMessage != null) {
+        AppToast.success(context, successMessage);
+      } else {
+        // Count down the auto-clear so the user can see when the clipboard empties.
+        AppToast.countdown(
+          context,
+          message: (s) => strings?.copiedClearsIn(s) ?? 'Copiado (se borra en ${s}s)',
+          duration: const Duration(seconds: AppConstants.clipboardClearSeconds),
+        );
+      }
     }
 
     _clearTimer?.cancel();

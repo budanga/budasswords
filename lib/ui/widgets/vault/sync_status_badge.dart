@@ -7,6 +7,7 @@ import 'package:budasswords/providers/locale_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:budasswords/providers/auth_provider.dart';
 import 'connect_cloud_dialog.dart';
+import '../motion/dither_cloud.dart';
 
 class SyncStatusBadge extends ConsumerWidget {
   const SyncStatusBadge({super.key});
@@ -78,7 +79,11 @@ class SyncStatusBadge extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, color: color, size: 16),
+                // Connected: a pixel cloud that pulses while syncing.
+                if (isCloudConnected && icon != Icons.cloud_off_outlined)
+                  DitherCloud(syncing: icon == Icons.sync, color: color)
+                else
+                  Icon(icon, color: color, size: 16),
                 const SizedBox(width: 6),
                 Text(
                   label,

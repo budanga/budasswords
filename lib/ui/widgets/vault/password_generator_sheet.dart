@@ -5,8 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/localization/app_strings.dart';
 import '../../../core/utils/clipboard_helper.dart';
+import '../../../core/utils/password_strength.dart';
 import '../../../providers/locale_provider.dart';
+import '../motion/decrypt_text.dart';
+import '../motion/dither_bar.dart';
+import '../motion/motion_kit.dart';
 
 /// Modal dialog: random password generator matching EntryDetailModal styling.
 class PasswordGeneratorSheet extends ConsumerStatefulWidget {
@@ -56,6 +61,7 @@ class _PasswordGeneratorSheetState extends ConsumerState<PasswordGeneratorSheet>
   bool _symbols = true;
 
   String _generated = '';
+  int _poolSize = 0;
   bool _copied = false;
   Timer? _copyTimer;
   final _rng = Random.secure();
@@ -83,6 +89,7 @@ class _PasswordGeneratorSheetState extends ConsumerState<PasswordGeneratorSheet>
     if (_lower)   pool.write(_lowerChars);
     if (_digits)  pool.write(_digitChars);
     if (_symbols) pool.write(_symbolChars);
+    _poolSize = pool.length;
 
     if (pool.isEmpty) {
       setState(() => _generated = '');
@@ -170,11 +177,12 @@ class _PasswordGeneratorSheetState extends ConsumerState<PasswordGeneratorSheet>
                 child: Row(
                   children: [
                     Expanded(
-                      child: SelectableText(
-                        _generated,
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          color: AppColors.textPrimary,
+                      // Each new password rolls in like a slot machine.
+                      child: DecryptText(
+                        text: _generated,
+                        rollOnChange: true,
+                        selectable: true,
+                        style: Motion.mono(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 1.2,
@@ -216,6 +224,11 @@ class _PasswordGeneratorSheetState extends ConsumerState<PasswordGeneratorSheet>
                     ),
                   ],
                 ),
+              ),
+              const Gap(12),
+              _StrengthMeter(
+                strength: PasswordStrength.of(length: _length, poolSize: _poolSize),
+                strings: strings,
               ),
               const Gap(16),
 
@@ -267,6 +280,48 @@ class _PasswordGeneratorSheetState extends ConsumerState<PasswordGeneratorSheet>
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Entropy of the generated password as a dither bar whose fill and colour
+/// follow the bits.
+class _StrengthMeter extends StatelessWidget {
+  final PasswordStrength strength;
+  final AppStrings strings;
+  const _StrengthMeter({required this.strength, required this.strings});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (strength.level) {
+      StrengthLevel.weak => (strings.strengthWeak, AppColors.danger),
+      StrengthLevel.fair => (strings.strengthFair, AppColors.warning),
+      StrengthLevel.strong => (strings.strengthStrong, AppColors.success),
+      StrengthLevel.veryStrong => (strings.strengthVeryStrong, AppColors.success),
+    };
+    final duration = Motion.enabled(context) ? const Duration(milliseconds: 600) : Duration.zero;
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(end: color),
+      duration: duration,
+      builder: (context, c, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TweenAnimationBuilder<double>(
+            tween: Tween(end: strength.fraction),
+            duration: duration,
+            curve: Curves.easeInOut,
+            builder: (context, v, _) => DitherBar(value: v, color: c ?? color, height: 10, softness: 10),
+          ),
+          const Gap(6),
+          Row(
+            children: [
+              Text(label, style: TextStyle(color: c, fontSize: 12.5, fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Text('${strength.bits} bits', style: Motion.mono(fontSize: 12, color: AppColors.textSecondary)),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -21,6 +20,9 @@ import 'package:budasswords/providers/pinned_provider.dart';
 import 'package:budasswords/ui/widgets/vault/password_generator_sheet.dart';
 import 'package:budasswords/ui/widgets/vault/entry_form_modal.dart';
 import 'package:budasswords/ui/widgets/common/app_logo.dart';
+import 'package:budasswords/ui/widgets/motion/ascii_empty_book.dart';
+import 'package:budasswords/ui/widgets/motion/decrypt_text.dart';
+import 'package:budasswords/ui/widgets/motion/motion_kit.dart';
 
 enum VaultCategory { all, logins, notes, cards, favorites }
 
@@ -972,34 +974,11 @@ class _SecretDetailBoxState extends ConsumerState<_SecretDetailBox> {
           // Content Text
           GestureDetector(
             onTap: () => setState(() => _revealed = !_revealed),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: _revealed
-                  ? SelectableText(
-                      widget.text,
-                      key: const ValueKey('revealed'),
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontFamily: 'monospace',
-                        fontSize: 14,
-                        height: 1.5,
-                      ),
-                    )
-                  : ClipRect(
-                      key: const ValueKey('hidden'),
-                      child: ImageFiltered(
-                        imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                        child: Text(
-                          widget.text,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontFamily: 'monospace',
-                            fontSize: 14,
-                            height: 1.5,
-                          ),
-                        ),
-                      ),
-                    ),
+            child: DecryptText(
+              text: widget.text,
+              revealed: _revealed,
+              selectable: true,
+              style: Motion.mono(fontSize: 14, height: 1.5),
             ),
           ),
         ],
@@ -1020,17 +999,8 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: AppColors.bg3,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.border, width: 1),
-            ),
-            child: const Icon(Icons.auto_stories_outlined, size: 36, color: AppColors.accent),
-          ),
-          const Gap(16),
+          const FittedBox(fit: BoxFit.scaleDown, child: AsciiEmptyBook()),
+          const Gap(12),
           Text(
             title,
             style: GoogleFonts.newsreader(

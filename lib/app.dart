@@ -6,6 +6,7 @@ import 'ui/theme/app_theme.dart';
 import 'package:budasswords/providers/auth_provider.dart';
 import 'package:budasswords/providers/locale_provider.dart';
 import 'package:budasswords/core/localization/app_strings.dart';
+import 'package:budasswords/ui/widgets/motion/pixel_dissolve.dart';
 
 class BudasswordsApp extends ConsumerStatefulWidget {
   const BudasswordsApp({super.key});
@@ -46,6 +47,7 @@ class _BudasswordsAppState extends ConsumerState<BudasswordsApp> {
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
     final locale = ref.watch(localeProvider);
+    final vaultOpen = ref.watch(authProvider.select((s) => s.status == AuthStatus.unlocked));
 
     return Listener(
       onPointerDown: (_) => ref.read(authProvider.notifier).resetAutolock(),
@@ -64,6 +66,11 @@ class _BudasswordsAppState extends ConsumerState<BudasswordsApp> {
           GlobalCupertinoLocalizations.delegate,
         ],
         routerConfig: router,
+        // Opening or locking the vault dissolves through terracotta pixels.
+        builder: (context, child) => PixelDissolve(
+          open: vaultOpen,
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
     );
   }

@@ -1,14 +1,15 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/clipboard_helper.dart';
 import '../../../providers/locale_provider.dart';
+import '../motion/decrypt_text.dart';
+import '../motion/motion_kit.dart';
 
-/// Displays secret text blurred by default.
-/// Tap to reveal. Provides clipboard copy with auto-clear.
+/// Displays secret text masked by default.
+/// Tap to reveal (it decrypts in place). Provides clipboard copy with auto-clear.
 class SecretField extends ConsumerStatefulWidget {
   final String text;
   const SecretField({super.key, required this.text});
@@ -53,34 +54,11 @@ class _SecretFieldState extends ConsumerState<SecretField> {
         Expanded(
           child: GestureDetector(
             onTap: () => setState(() => _revealed = !_revealed),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              child: _revealed
-                  ? SelectableText(
-                      widget.text,
-                      key: const ValueKey('revealed'),
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontFamily: 'JetBrainsMono',
-                        fontSize: 14,
-                        height: 1.6,
-                      ),
-                    )
-                  : ClipRect(
-                      key: const ValueKey('hidden'),
-                      child: ImageFiltered(
-                        imageFilter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                        child: Text(
-                          widget.text,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontFamily: 'JetBrainsMono',
-                            fontSize: 14,
-                            height: 1.6,
-                          ),
-                        ),
-                      ),
-                    ),
+            child: DecryptText(
+              text: widget.text,
+              revealed: _revealed,
+              selectable: true,
+              style: Motion.mono(fontSize: 14, height: 1.6),
             ),
           ),
         ),

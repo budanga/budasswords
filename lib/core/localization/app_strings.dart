@@ -129,6 +129,10 @@ abstract class AppStrings {
   String get generatePassword;
   String get passwordGeneratorTitle;
   String get length;
+  String get strengthWeak;
+  String get strengthFair;
+  String get strengthStrong;
+  String get strengthVeryStrong;
   String get uppercase;
   String get lowercase;
   String get numbers;
@@ -349,6 +353,10 @@ class _SpanishStrings implements AppStrings {
   @override String get generatePassword => 'Generar contraseña';
   @override String get passwordGeneratorTitle => 'Generador de contraseñas';
   @override String get length => 'Longitud';
+  @override String get strengthWeak => 'Débil';
+  @override String get strengthFair => 'Aceptable';
+  @override String get strengthStrong => 'Fuerte';
+  @override String get strengthVeryStrong => 'Muy fuerte';
   @override String get uppercase => 'Mayúsculas';
   @override String get lowercase => 'Minúsculas';
   @override String get numbers => 'Números';
@@ -572,6 +580,10 @@ class _EnglishStrings implements AppStrings {
   @override String get generatePassword => 'Generate password';
   @override String get passwordGeneratorTitle => 'Password Generator';
   @override String get length => 'Length';
+  @override String get strengthWeak => 'Weak';
+  @override String get strengthFair => 'Fair';
+  @override String get strengthStrong => 'Strong';
+  @override String get strengthVeryStrong => 'Very strong';
   @override String get uppercase => 'Uppercase';
   @override String get lowercase => 'Lowercase';
   @override String get numbers => 'Numbers';
